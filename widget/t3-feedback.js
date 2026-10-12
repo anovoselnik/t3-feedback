@@ -13,6 +13,10 @@
   // Longer than the Receiver's own dispatch timeout, so a slow Thread start is not reported as a failure.
   const SEND_TIMEOUT_MS = 150_000;
   const TAILSCALE_HINT = "Check that this device is connected to Tailscale.";
+  // Larger images, and any that are not PNG or JPEG, are re-encoded as JPEG no larger than MAX_IMAGE_SIDE.
+  const REENCODE_ABOVE_BYTES = 1.5 * 1024 * 1024;
+  const MAX_IMAGE_SIDE = 1920;
+  const JPEG_QUALITY = 0.85;
 
   // Turbo Drive runs the scripts of every new <body> again; the host from the first run is carried over.
   if (window.t3FeedbackWidget) return;
@@ -68,8 +72,50 @@
     return online;
   }
 
+  // Returns the first image on the clipboard; read synchronously, since the data is gone once the handler returns.
+  function pastedImage(event) {
+    const item = [...(event.clipboardData?.items ?? [])].find(
+      (item) => item.kind === "file" && item.type.startsWith("image/"),
+    );
+    return item?.getAsFile() ?? null;
+  }
+
+  // Shown without the Tailscale hint: the image, not the connection, is the problem.
+  class ImageError extends Error {}
+
+  async function normaliseImage(file) {
+    if ((file.type === "image/png" || file.type === "image/jpeg") && file.size <= REENCODE_ABOVE_BYTES) return file;
+
+    let bitmap;
+    try {
+      // The canvas drops EXIF, so a phone photo's rotation has to be applied while decoding.
+      bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch {
+      throw new ImageError("This image could not be read; try a PNG or JPEG.");
+    }
+    try {
+      const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      const context = canvas.getContext("2d");
+      // JPEG has no transparency; without a background transparent pixels turn black.
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY));
+      if (!blob) throw new Error("toBlob returned nothing");
+      return blob;
+    } catch {
+      // Most likely the canvas ran past the browser's memory limit (getContext returns null on Safari).
+      throw new ImageError("This image could not be converted to JPEG.");
+    } finally {
+      bitmap.close();
+    }
+  }
+
   // A multipart body and no custom headers keep this a simple request, so there is no CORS preflight.
-  async function submit({ project, machine, receiverUrl }, message) {
+  async function submit({ project, machine, receiverUrl }, message, image) {
     const body = new FormData();
     body.append("project", project);
     body.append("machine", machine);
@@ -77,6 +123,7 @@
     body.append("pageUrl", location.href);
     body.append("viewport", `${window.innerWidth}x${window.innerHeight}`);
     body.append("userAgent", navigator.userAgent);
+    if (image) body.append("image", image, "screenshot");
 
     let response;
     try {
@@ -120,7 +167,15 @@
           <span class="title">Send feedback</span>
           <button class="close" type="button" aria-label="Close">×</button>
         </div>
-        <textarea rows="5" aria-label="Feedback message" placeholder="What should change on this page?"></textarea>
+        <textarea rows="5" aria-label="Feedback message" placeholder="What should change on this page? Paste a screenshot to attach it."></textarea>
+        <div class="attachment">
+          <span class="preview" hidden>
+            <img class="thumbnail" alt="Attached image" />
+            <button class="remove" type="button" aria-label="Remove image">×</button>
+          </span>
+          <button class="attach" type="button">Attach image</button>
+          <input class="picker" type="file" accept="image/*" hidden />
+        </div>
         <p class="status" role="status"></p>
         <div class="footer">
           <span class="meta"></span>
@@ -133,9 +188,16 @@
     const textarea = root.querySelector("textarea");
     const status = root.querySelector(".status");
     const sendButton = root.querySelector(".send");
+    const preview = root.querySelector(".preview");
+    const thumbnail = root.querySelector(".thumbnail");
+    const attachButton = root.querySelector(".attach");
+    const picker = root.querySelector(".picker");
     const shortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘+Enter" : "Ctrl+Enter";
     root.querySelector(".meta").textContent = `To ${config.machine} · ${shortcut}`;
     let sending = false;
+    // A promise of the normalised image, or null; a newer paste or pick replaces it.
+    let pendingImage = null;
+    let thumbnailUrl = null;
 
     const open = () => {
       launcher.hidden = true;
@@ -148,6 +210,10 @@
       launcher.focus();
     };
 
+    const clearStatus = () => {
+      status.className = "status";
+      status.replaceChildren();
+    };
     const showSent = (threadUrl) => {
       const link = document.createElement("a");
       link.href = threadUrl;
@@ -157,12 +223,56 @@
       status.className = "status sent";
       status.replaceChildren("Sent. ", link);
     };
-    const showError = (message) => {
+    const showError = (error) => {
+      status.className = "status error";
+      if (error instanceof ImageError) {
+        status.replaceChildren(error.message);
+        return;
+      }
       const hint = document.createElement("span");
       hint.className = "hint";
       hint.textContent = TAILSCALE_HINT;
-      status.className = "status error";
-      status.replaceChildren(message, " ", hint);
+      status.replaceChildren(error.message, " ", hint);
+    };
+
+    const showImage = (blob) => {
+      if (thumbnailUrl) URL.revokeObjectURL(thumbnailUrl);
+      thumbnailUrl = blob && URL.createObjectURL(blob);
+      thumbnail.src = thumbnailUrl ?? "";
+      preview.hidden = !blob;
+      attachButton.textContent = blob ? "Replace image" : "Attach image";
+    };
+    const attach = (file) => {
+      const pending = normaliseImage(file);
+      pendingImage = pending;
+      clearStatus();
+      // Re-encoding a large image takes a moment; the thumbnail replaces this once it is done.
+      attachButton.textContent = "Preparing image…";
+      pending.then(
+        (blob) => {
+          if (pendingImage === pending) showImage(blob);
+        },
+        (error) => {
+          if (pendingImage !== pending) return;
+          pendingImage = null;
+          showImage(null);
+          showError(error);
+        },
+      );
+    };
+    const removeImage = () => {
+      pendingImage = null;
+      showImage(null);
+    };
+    // Waits for the image to finish preparing, following a remove or replace made in the meantime.
+    const currentImage = async () => {
+      let pending;
+      let blob;
+      do {
+        pending = pendingImage;
+        blob = await pending;
+      } while (pending !== pendingImage);
+      return { pending, blob };
     };
 
     const send = async () => {
@@ -177,13 +287,14 @@
       const refocus = root.activeElement === sendButton;
       sendButton.disabled = true;
       sendButton.textContent = "Sending…";
-      status.className = "status";
-      status.replaceChildren();
+      clearStatus();
       try {
-        showSent(await submit(config, message));
+        const { pending, blob } = await currentImage();
+        showSent(await submit(config, message, blob));
         textarea.value = "";
+        if (pendingImage === pending) removeImage();
       } catch (error) {
-        showError(error.message);
+        showError(error);
       } finally {
         sending = false;
         sendButton.disabled = false;
@@ -194,6 +305,24 @@
 
     launcher.addEventListener("click", open);
     root.querySelector(".close").addEventListener("click", close);
+    // Only an image paste is taken over; text pastes into the textarea as usual.
+    panel.addEventListener("paste", (event) => {
+      const file = pastedImage(event);
+      if (!file) return;
+      event.preventDefault();
+      attach(file);
+    });
+    attachButton.addEventListener("click", () => picker.click());
+    picker.addEventListener("change", () => {
+      const [file] = picker.files;
+      // Cleared so that picking the same file again still fires change.
+      picker.value = "";
+      if (file) attach(file);
+    });
+    root.querySelector(".remove").addEventListener("click", () => {
+      removeImage();
+      attachButton.focus();
+    });
     panel.addEventListener("submit", (event) => {
       event.preventDefault();
       send();
@@ -208,8 +337,8 @@
         send();
       }
     });
-    // Keep the page's keyboard shortcuts from firing while typing in the Widget.
-    for (const type of ["keydown", "keyup", "keypress"]) {
+    // Keep the page's keyboard shortcuts and paste handlers from acting on what happens in the Widget.
+    for (const type of ["keydown", "keyup", "keypress", "paste"]) {
       panel.addEventListener(type, (event) => event.stopPropagation());
     }
 
@@ -291,6 +420,37 @@
     .error { color: #b91c1c; }
     .hint { display: block; color: #52525b; }
     .meta { color: #71717a; font-size: 12px; }
+    .attachment { display: flex; align-items: center; gap: 8px; }
+    .preview { position: relative; display: inline-block; }
+    .thumbnail {
+      display: block;
+      max-width: 96px;
+      max-height: 64px;
+      border: 1px solid #d4d4d8;
+      border-radius: 6px;
+    }
+    .remove {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      border-radius: 999px;
+      background: #18181b;
+      color: #fafafa;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .attach {
+      padding: 4px 10px;
+      border: 1px solid #d4d4d8;
+      border-radius: 8px;
+      background: #ffffff;
+      font-size: 13px;
+    }
+    .attach:hover { background: #f4f4f5; }
     .send {
       padding: 8px 14px;
       border: none;

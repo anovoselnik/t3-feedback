@@ -56,10 +56,53 @@ test("echoes a Feedback and links to a page that shows it", async () => {
   assert.deepEqual(receiver.received(threadId), expected);
 });
 
-test("echoes an image as its type and size", async () => {
-  const image = new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" });
-  const response = await fetch(`${base}/feedback`, { method: "POST", body: form(image) });
-  assert.deepEqual((await response.json()).echo.image, { mimeType: "image/png", sizeBytes: 4 });
+async function echoedImage(bytes, type) {
+  const response = await fetch(`${base}/feedback`, { method: "POST", body: form(new Blob([bytes], { type })) });
+  return (await response.json()).echo.image;
+}
+
+// The 8-byte signature and the IHDR chunk, which is all the echo reads.
+function pngHeader(width, height) {
+  const bytes = Buffer.alloc(24);
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]).copy(bytes);
+  bytes.write("IHDR", 12);
+  bytes.writeUInt32BE(width, 16);
+  bytes.writeUInt32BE(height, 20);
+  return bytes;
+}
+
+// SOI, an APP0 segment to skip over, then a baseline SOF0 frame header.
+function jpegHeader(width, height) {
+  const app0 = [0xff, 0xe0, 0, 4, 0, 0];
+  const sof0 = [0xff, 0xc0, 0, 8, 8, height >> 8, height & 0xff, width >> 8, width & 0xff, 3];
+  return Buffer.from([0xff, 0xd8, ...app0, ...sof0]);
+}
+
+test("echoes a PNG as its type, size, and dimensions", async () => {
+  assert.deepEqual(await echoedImage(pngHeader(800, 600), "image/png"), {
+    mimeType: "image/png",
+    sizeBytes: 24,
+    width: 800,
+    height: 600,
+  });
+});
+
+test("echoes a JPEG as its type, size, and dimensions", async () => {
+  assert.deepEqual(await echoedImage(jpegHeader(1920, 1080), "image/jpeg"), {
+    mimeType: "image/jpeg",
+    sizeBytes: 18,
+    width: 1920,
+    height: 1080,
+  });
+});
+
+test("echoes an image it cannot measure without dimensions", async () => {
+  assert.deepEqual(await echoedImage(new Uint8Array([1, 2, 3, 4]), "image/webp"), {
+    mimeType: "image/webp",
+    sizeBytes: 4,
+    width: null,
+    height: null,
+  });
 });
 
 test("still refuses origins that are not allowlisted", async () => {
