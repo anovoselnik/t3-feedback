@@ -1,7 +1,9 @@
 // Serves the manual test page and two echo Receivers for it: `npm run test-page`.
 // The page and the Receivers listen on different ports so the Widget's requests are cross-origin, as on a Staging page.
+// `npm run test-page -- --jsdelivr` loads the released Widget from jsDelivr instead of widget/.
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { parseArgs } from "node:util";
 
 import { createEchoReceiver } from "../receiver/echo-receiver.js";
 import { createHttpServer } from "../receiver/http-layer.js";
@@ -13,6 +15,9 @@ const MACHINES = [
   { machine: "echo2", port: 7780 },
 ];
 const PAGE_PORT = 7779;
+// The release that Staging pages embed. Bump it with the embed URLs in the README.
+const WIDGET_RELEASE = "v0.1.0";
+const LOCAL_WIDGET = "/t3-feedback.js";
 const pageOrigins = [`http://localhost:${PAGE_PORT}`, `http://127.0.0.1:${PAGE_PORT}`];
 
 const FILES = {
@@ -20,9 +25,14 @@ const FILES = {
   "/other.html": { path: "test-page/other.html", type: "text/html" },
   "/offline.html": { path: "test-page/offline.html", type: "text/html" },
   "/hostile.css": { path: "test-page/hostile.css", type: "text/css" },
-  "/t3-feedback.js": { path: "widget/t3-feedback.js", type: "text/javascript" },
+  [LOCAL_WIDGET]: { path: "widget/t3-feedback.js", type: "text/javascript" },
 };
 const root = new URL("../", import.meta.url);
+
+const { values: options } = parseArgs({ options: { jsdelivr: { type: "boolean", default: false } } });
+const widgetUrl = options.jsdelivr
+  ? `https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@${WIDGET_RELEASE}/widget/t3-feedback.js`
+  : LOCAL_WIDGET;
 
 const receivers = MACHINES.map(({ machine, port }) => {
   const receiver = createEchoReceiver({ machine, threadBaseUrl: `${pageOrigins[0]}/thread` });
@@ -62,9 +72,12 @@ createServer(async (request, response) => {
     response.end("Not found");
     return;
   }
+  let body = await readFile(new URL(file.path, root));
+  if (file.type === "text/html") body = body.toString().replaceAll(`src="${LOCAL_WIDGET}"`, `src="${widgetUrl}"`);
   response.writeHead(200, { "content-type": file.type, "cache-control": "no-store" });
-  response.end(await readFile(new URL(file.path, root)));
+  response.end(body);
 }).listen(PAGE_PORT, "127.0.0.1", () => {
   const receiverList = MACHINES.map(({ machine, port }) => `${machine} on http://127.0.0.1:${port}`).join(", ");
   console.log(`Test page on ${pageOrigins[0]}, echo Receivers: ${receiverList}`);
+  console.log(`Widget from ${widgetUrl}`);
 });
