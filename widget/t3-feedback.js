@@ -1,13 +1,15 @@
 // The t3-feedback Widget: shows a "Send feedback" button and sends each Feedback to a Receiver.
 // Classic script, no build step, no dependencies. Configured on its script tag:
 //   data-project="owner/name"
-//   data-machines='{"omarchy": "https://omarchy.example.ts.net:7777"}'
+//   data-machines='{"omarchy": "https://omarchy.example.ts.net:7777", "macbook": "https://macbook.example.ts.net:7777"}'
 //   data-receiver-path="/prefix" (optional; where the Receiver is mounted under the base URL)
 (() => {
   "use strict";
 
   // Tag name and id of the element the Widget mounts into.
   const HOST = "t3-feedback-widget";
+  // localStorage is per origin, so one key holds the last-used Machine for this site.
+  const MACHINE_KEY = "t3-feedback:machine";
   // Leaves room for the Receiver's own check on T3 Code, which can take up to 2 seconds.
   const PROBE_TIMEOUT_MS = 4000;
   // Longer than the Receiver's own dispatch timeout, so a slow Thread start is not reported as a failure.
@@ -30,12 +32,12 @@
   const mountIfOnline = async () => {
     if (probing || mounted) return;
     probing = true;
-    const online = await probe(config.receiverUrl);
+    const online = await onlineMachines(config.machines);
     probing = false;
-    if (!online || mounted) return;
+    if (!online.length || mounted) return;
     mounted = true;
-    if (document.body) mount(config);
-    else document.addEventListener("DOMContentLoaded", () => mount(config), { once: true });
+    if (document.body) mount(config, online);
+    else document.addEventListener("DOMContentLoaded", () => mount(config, online), { once: true });
   };
   mountIfOnline();
   // A Machine that was offline, or a local-network prompt answered after the probe gave up,
@@ -50,13 +52,22 @@
     } catch {
       machineMap = null;
     }
-    const [machine, baseUrl] = Object.entries(machineMap ?? {})[0] ?? [];
-    if (!project || typeof baseUrl !== "string") {
-      console.warn("t3-feedback: the script tag needs data-project and a JSON data-machines map");
+    const path = `/${receiverPath}`.replace(/\/+/g, "/").replace(/\/$/, "");
+    const machineList = Object.entries(machineMap ?? {})
+      .filter(([, baseUrl]) => typeof baseUrl === "string")
+      .map(([label, baseUrl]) => ({ label, receiverUrl: baseUrl.replace(/\/+$/, "") + path }));
+    if (!project || !machineList.length) {
+      console.warn("t3-feedback: the script tag needs data-project and a JSON data-machines map of label to URL");
       return null;
     }
-    const path = `/${receiverPath}`.replace(/\/+/g, "/").replace(/\/$/, "");
-    return { project, machine, receiverUrl: baseUrl.replace(/\/+$/, "") + path };
+    return { project, machines: machineList };
+  }
+
+  // Probes every Machine at once and keeps the ones that answered, in the order they were configured.
+  // The whole probe takes as long as the slowest Machine, at most PROBE_TIMEOUT_MS.
+  async function onlineMachines(machines) {
+    const answers = await Promise.all(machines.map((machine) => probe(machine.receiverUrl)));
+    return machines.filter((machine, index) => answers[index]);
   }
 
   // The Receiver's hostname resolves off the tailnet too, where requests hang instead of failing,
@@ -70,6 +81,23 @@
     }
     if (!online) console.info(`t3-feedback: no answer from ${receiverUrl}/health; check Tailscale and the Receiver's allowedOrigins`);
     return online;
+  }
+
+  // Storage access throws when the site has it blocked; the Widget then just forgets between visits.
+  function rememberedMachine() {
+    try {
+      return localStorage.getItem(MACHINE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  function rememberMachine(label) {
+    try {
+      localStorage.setItem(MACHINE_KEY, label);
+    } catch {
+      // Not remembered this time.
+    }
   }
 
   // Returns the first image on the clipboard; read synchronously, since the data is gone once the handler returns.
@@ -115,7 +143,7 @@
   }
 
   // A multipart body and no custom headers keep this a simple request, so there is no CORS preflight.
-  async function submit({ project, machine, receiverUrl }, message, image) {
+  async function submit(project, { label: machine, receiverUrl }, message, image) {
     const body = new FormData();
     body.append("project", project);
     body.append("machine", machine);
@@ -157,7 +185,8 @@
     return host;
   }
 
-  function mount(config) {
+  // Mounts the Widget with the Machines that answered the probe; the chooser offers only those.
+  function mount({ project }, machines) {
     const host = createHost();
     const root = host.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${STYLE}</style>
@@ -178,7 +207,7 @@
         </div>
         <p class="status" role="status"></p>
         <div class="footer">
-          <span class="meta"></span>
+          <span class="meta">To <select class="machine" aria-label="Machine"></select> · <span class="shortcut"></span></span>
           <button class="send" type="submit">Send</button>
         </div>
       </form>`;
@@ -192,8 +221,13 @@
     const thumbnail = root.querySelector(".thumbnail");
     const attachButton = root.querySelector(".attach");
     const picker = root.querySelector(".picker");
-    const shortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘+Enter" : "Ctrl+Enter";
-    root.querySelector(".meta").textContent = `To ${config.machine} · ${shortcut}`;
+    const chooser = root.querySelector(".machine");
+    root.querySelector(".shortcut").textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘+Enter" : "Ctrl+Enter";
+    for (const { label } of machines) chooser.append(new Option(label));
+    // The Machine used last time on this site, when it is online; otherwise the first online one.
+    const remembered = rememberedMachine();
+    chooser.selectedIndex = Math.max(0, machines.findIndex(({ label }) => label === remembered));
+    const chosenMachine = () => machines[chooser.selectedIndex];
     let sending = false;
     // A promise of the normalised image, or null; a newer paste or pick replaces it.
     let pendingImage = null;
@@ -288,9 +322,12 @@
       sendButton.disabled = true;
       sendButton.textContent = "Sending…";
       clearStatus();
+      // Taken now, so changing the chooser during a send does not change where this Feedback goes.
+      const machine = chosenMachine();
       try {
         const { pending, blob } = await currentImage();
-        showSent(await submit(config, message, blob));
+        showSent(await submit(project, machine, message, blob));
+        rememberMachine(machine.label);
         textarea.value = "";
         if (pendingImage === pending) removeImage();
       } catch (error) {
@@ -366,7 +403,7 @@
     }
     *, *::before, *::after { box-sizing: border-box; }
     [hidden] { display: none !important; }
-    button, textarea { font: inherit; color: inherit; margin: 0; }
+    button, textarea, select { font: inherit; color: inherit; margin: 0; }
     button { cursor: pointer; }
     .launcher {
       padding: 10px 16px;
@@ -413,13 +450,23 @@
       background: #ffffff;
       resize: vertical;
     }
-    textarea:focus, button:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+    textarea:focus, button:focus-visible, select:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
     .status { margin: 0; font-size: 13px; }
     .status:empty { display: none; }
     .status a { color: #2563eb; font-weight: 600; }
     .error { color: #b91c1c; }
     .hint { display: block; color: #52525b; }
-    .meta { color: #71717a; font-size: 12px; }
+    .meta { display: flex; align-items: center; gap: 4px; color: #71717a; font-size: 12px; }
+    .machine {
+      max-width: 140px;
+      padding: 2px 4px;
+      border: 1px solid #d4d4d8;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #18181b;
+      font-size: 12px;
+      cursor: pointer;
+    }
     .attachment { display: flex; align-items: center; gap: 8px; }
     .preview { position: relative; display: inline-block; }
     .thumbnail {
