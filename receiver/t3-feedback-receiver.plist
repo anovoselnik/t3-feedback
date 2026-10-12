@@ -1,25 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- t3-feedback Receiver: opens a T3 Code Thread for each Feedback.
-     launchd does not expand ~ or $HOME, so install with __HOME__ replaced by your home directory. -->
+<!--
+  launchd agent for the t3-feedback Receiver: opens a T3 Code Thread for each Feedback.
+  launchd expands neither ~ nor $HOME, so docs/setup-macos.md replaces __HOME__ and
+  __NODE__ (the absolute path of a Node 22+ binary) when it installs this file.
+-->
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>t3-feedback-receiver</string>
+  <string>com.github.anovoselnik.t3-feedback-receiver</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE__</string>
+    <string>receiver/main.js</string>
+  </array>
   <key>WorkingDirectory</key>
   <string>__HOME__/.local/share/t3-feedback</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <!-- Node 22+ must be on this PATH; it covers mise shims and Homebrew on Apple silicon and Intel. -->
     <key>PATH</key>
-    <string>__HOME__/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/usr/bin/env</string>
-    <string>node</string>
-    <string>receiver/main.js</string>
-  </array>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
@@ -29,7 +30,6 @@
   </dict>
   <key>ThrottleInterval</key>
   <integer>5</integer>
-  <!-- 0077 -->
   <key>Umask</key>
   <integer>63</integer>
   <key>StandardOutPath</key>
