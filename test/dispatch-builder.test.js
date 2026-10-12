@@ -29,7 +29,7 @@ function build(overrides = {}) {
     branch: freshBranch,
     fallbackModelSelection,
     uuid: () => `uuid-${++id}`,
-    hex: () => "a1b2",
+    branchSuffix: () => "a1b2",
     now: new Date("2026-10-12T10:00:00.000Z"),
     ...overrides,
   });

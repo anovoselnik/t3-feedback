@@ -3,27 +3,27 @@ import { ReceiverError } from "./errors.js";
 import { prepareBranch } from "./branch-preparer.js";
 import { resolveProject } from "./project-resolver.js";
 
-export function createReceiver({ config, t3, git, readRemote, fetchTimeoutMs }) {
+export function createReceiver({ config, t3, git, readRemote }) {
   return {
     async health() {
       return { machine: config.machine, t3Reachable: await t3.reachable() };
     },
 
     async submit(feedback) {
-      const projects = await fromT3(t3.listProjects());
+      const projects = await asBadGateway(t3.listProjects());
       const project = await resolveProject(feedback.project, projects, readRemote);
       if (!project) {
         throw new ReceiverError(404, `No T3 Code project for ${feedback.project} on ${config.machine}. Add it there first.`);
       }
-      const branch = await prepareBranch(project.workspaceRoot, git, { fetchTimeoutMs });
+      const branch = await prepareBranch(project.workspaceRoot, git);
       const command = buildDispatch({
         feedback,
         project,
         branch,
         fallbackModelSelection: config.fallbackModelSelection,
       });
-      const environmentId = await fromT3(t3.environmentId());
-      await fromT3(t3.dispatch(command));
+      const environmentId = await asBadGateway(t3.environmentId());
+      await asBadGateway(t3.dispatch(command));
       return {
         threadId: command.threadId,
         threadUrl: `${config.webUiBaseUrl.replace(/\/+$/, "")}/${environmentId}/${command.threadId}`,
@@ -32,7 +32,7 @@ export function createReceiver({ config, t3, git, readRemote, fetchTimeoutMs }) 
   };
 }
 
-async function fromT3(promise) {
+async function asBadGateway(promise) {
   try {
     return await promise;
   } catch (error) {

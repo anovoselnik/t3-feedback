@@ -134,6 +134,7 @@ test("rejects a body over the size limit before parsing it", async () => {
   const body = form({ message: "x".repeat(12 * 1024 * 1024) });
   const response = await post(body);
   assert.equal(response.status, 413);
+  assert.match((await response.json()).error, /Feedback is larger than 11 MB/);
 });
 
 test("rejects images in formats T3 Code cannot attach", async () => {

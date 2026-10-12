@@ -1,10 +1,10 @@
 import { createServer } from "node:http";
 
+import { IMAGE_EXTENSIONS } from "./dispatch-builder.js";
 import { ReceiverError } from "./errors.js";
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_BODY_BYTES = MAX_IMAGE_BYTES + 1024 * 1024;
-const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const IDENTITY_HEADER = "tailscale-user-login";
 
 export function originMatcher(patterns) {
@@ -100,7 +100,7 @@ async function readFeedback(request) {
 async function readImage(file) {
   if (!file || typeof file === "string" || file.size === 0) return null;
   if (file.size > MAX_IMAGE_BYTES) throw imageTooLarge();
-  if (!IMAGE_TYPES.has(file.type)) throw new ReceiverError(415, `Image type ${file.type || "(none)"} is not supported; use PNG, JPEG, WebP, or GIF`);
+  if (!Object.hasOwn(IMAGE_EXTENSIONS, file.type)) throw new ReceiverError(415, `Image type ${file.type || "(none)"} is not supported; use PNG, JPEG, WebP, or GIF`);
   return { mimeType: file.type, bytes: Buffer.from(await file.arrayBuffer()) };
 }
 
@@ -115,6 +115,6 @@ async function readBody(request) {
     size += chunk.length;
     if (size <= MAX_BODY_BYTES) chunks.push(chunk);
   }
-  if (size > MAX_BODY_BYTES) throw imageTooLarge();
+  if (size > MAX_BODY_BYTES) throw new ReceiverError(413, "Feedback is larger than 11 MB; images are limited to 10 MB");
   return Buffer.concat(chunks);
 }
