@@ -1,0 +1,16 @@
+[Unit]
+Description=t3-feedback Receiver: opens a T3 Code Thread for each Feedback
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/t3-feedback
+# Node 22+ must be on this PATH; the mise shims directory covers a mise-managed Node.
+Environment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
+ExecStart=/usr/bin/env node receiver/main.js
+SyslogIdentifier=t3-feedback-receiver
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=default.target
