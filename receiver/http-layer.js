@@ -18,7 +18,9 @@ function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function createHttpServer({ config, receiver }) {
+// requireIdentity is off only for the echo Receiver behind the manual test page, which
+// runs on loopback without Tailscale Serve and never dispatches.
+export function createHttpServer({ config, receiver, requireIdentity = true }) {
   const originAllowed = originMatcher(config.allowedOrigins);
 
   return createServer(async (request, response) => {
@@ -45,9 +47,11 @@ export function createHttpServer({ config, receiver }) {
         return;
       }
 
-      const identity = request.headers[IDENTITY_HEADER];
-      if (!identity) throw new ReceiverError(401, "Missing Tailscale identity; reach this Receiver through Tailscale Serve");
-      if (identity !== config.tailscaleLogin) throw new ReceiverError(403, `Tailscale identity ${identity} is not allowed`);
+      if (requireIdentity) {
+        const identity = request.headers[IDENTITY_HEADER];
+        if (!identity) throw new ReceiverError(401, "Missing Tailscale identity; reach this Receiver through Tailscale Serve");
+        if (identity !== config.tailscaleLogin) throw new ReceiverError(403, `Tailscale identity ${identity} is not allowed`);
+      }
       // Browsers always send Origin on cross-origin requests; its absence means a non-browser client such as curl.
       if (origin && !originAllowed(origin)) throw new ReceiverError(403, `Origin ${origin} is not allowed`);
 
