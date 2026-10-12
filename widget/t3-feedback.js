@@ -143,7 +143,7 @@
   }
 
   // A multipart body and no custom headers keep this a simple request, so there is no CORS preflight.
-  async function submit({ project, machine, receiverUrl }, message, image) {
+  async function submit(project, { label: machine, receiverUrl }, message, image) {
     const body = new FormData();
     body.append("project", project);
     body.append("machine", machine);
@@ -326,7 +326,7 @@
       const machine = chosenMachine();
       try {
         const { pending, blob } = await currentImage();
-        showSent(await submit({ project, machine: machine.label, receiverUrl: machine.receiverUrl }, message, blob));
+        showSent(await submit(project, machine, message, blob));
         rememberMachine(machine.label);
         textarea.value = "";
         if (pendingImage === pending) removeImage();
