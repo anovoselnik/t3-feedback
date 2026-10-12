@@ -50,6 +50,11 @@
         </li>
         <li><a href="/other.html">Go to another page with Turbo Drive</a>: the Widget stays, open and with its text, and is not duplicated.</li>
         <li><a href="/offline.html" data-turbo="false">Open a page whose only Machine never answers</a>: no button appears.</li>
+        <li>
+          Restart with <code>npm run test-page -- --jsdelivr</code> to load the released Widget from jsDelivr instead of
+          <code>widget/</code>; the terminal prints which URL the pages use. Everything above behaves the same, except
+          for changes made since that release.
+        </li>
       </ul>
     </main>
     <script
