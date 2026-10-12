@@ -1,0 +1,13 @@
+{
+  "machine": "omarchy",
+  "tailscaleLogin": "you@github",
+  "tokenPath": "~/.config/t3-feedback/token",
+  "t3BaseUrl": "http://127.0.0.1:3773",
+  "webUiBaseUrl": "https://omarchy.tail8fd60a.ts.net",
+  "allowedOrigins": ["https://staging.cajanka.hr", "https://*.local", "http://*.local"],
+  "fallbackModelSelection": {
+    "instanceId": "claudeAgent",
+    "model": "claude-opus-5-5",
+    "options": [{ "id": "effort", "value": "medium" }]
+  }
+}

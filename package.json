@@ -1,0 +1,12 @@
+{
+  "name": "t3-feedback",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node receiver/main.js",
+    "test": "node --test"
+  }
+}
