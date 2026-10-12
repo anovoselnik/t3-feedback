@@ -1,12 +1,17 @@
-// Serves the manual test page and an echo Receiver for it: `npm run test-page`.
-// The two listen on different ports so the Widget's requests are cross-origin, as on a Staging page.
+// Serves the manual test page and two echo Receivers for it: `npm run test-page`.
+// The page and the Receivers listen on different ports so the Widget's requests are cross-origin, as on a Staging page.
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 
 import { createEchoReceiver } from "../receiver/echo-receiver.js";
 import { createHttpServer } from "../receiver/http-layer.js";
 
-const RECEIVER_PORT = 7778;
+// Two Machines, so the chooser has something to choose between. The page also configures a third
+// Machine, "nowhere", whose probe never gets an answer.
+const MACHINES = [
+  { machine: "echo", port: 7778 },
+  { machine: "echo2", port: 7780 },
+];
 const PAGE_PORT = 7779;
 const pageOrigins = [`http://localhost:${PAGE_PORT}`, `http://127.0.0.1:${PAGE_PORT}`];
 
@@ -19,30 +24,33 @@ const FILES = {
 };
 const root = new URL("../", import.meta.url);
 
-const receiver = createEchoReceiver({ machine: "echo", threadBaseUrl: `${pageOrigins[0]}/thread` });
-const loggingReceiver = {
-  ...receiver,
-  async submit(feedback) {
-    const result = await receiver.submit(feedback);
-    console.log("Feedback", JSON.stringify(result.echo, null, 2));
-    return result;
-  },
-};
-createHttpServer({ config: { allowedOrigins: pageOrigins }, receiver: loggingReceiver, requireIdentity: false }).listen(
-  RECEIVER_PORT,
-  "127.0.0.1",
-);
+const receivers = MACHINES.map(({ machine, port }) => {
+  const receiver = createEchoReceiver({ machine, threadBaseUrl: `${pageOrigins[0]}/thread` });
+  const loggingReceiver = {
+    ...receiver,
+    async submit(feedback) {
+      const result = await receiver.submit(feedback);
+      console.log(`Feedback on ${machine}`, JSON.stringify(result.echo, null, 2));
+      return result;
+    },
+  };
+  createHttpServer({ config: { allowedOrigins: pageOrigins }, receiver: loggingReceiver, requireIdentity: false }).listen(
+    port,
+    "127.0.0.1",
+  );
+  return receiver;
+});
 
 createServer(async (request, response) => {
   const { pathname } = new URL(request.url, "http://page");
 
-  // offline.html points the Widget here, where the health probe never gets an answer.
+  // The "nowhere" Machine points the Widget here, where the health probe never gets an answer.
   if (pathname.startsWith("/never/")) return;
 
-  // The echo Receiver's "Thread": the Feedback it received.
+  // An echo Receiver's "Thread": the Feedback it received. Thread ids are unique across both.
   const threadId = pathname.match(/^\/thread\/([\w-]+)$/)?.[1];
   if (threadId) {
-    const feedback = receiver.received(threadId);
+    const feedback = receivers.map((receiver) => receiver.received(threadId)).find(Boolean);
     response.writeHead(feedback ? 200 : 404, { "content-type": "application/json" });
     response.end(JSON.stringify(feedback ?? { error: "No Feedback with that id" }, null, 2));
     return;
@@ -57,5 +65,6 @@ createServer(async (request, response) => {
   response.writeHead(200, { "content-type": file.type, "cache-control": "no-store" });
   response.end(await readFile(new URL(file.path, root)));
 }).listen(PAGE_PORT, "127.0.0.1", () => {
-  console.log(`Test page on ${pageOrigins[0]}, echo Receiver on http://127.0.0.1:${RECEIVER_PORT}`);
+  const receiverList = MACHINES.map(({ machine, port }) => `${machine} on http://127.0.0.1:${port}`).join(", ");
+  console.log(`Test page on ${pageOrigins[0]}, echo Receivers: ${receiverList}`);
 });
