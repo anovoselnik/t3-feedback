@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>t3-feedback test page</title>
+    <link id="hostile" rel="stylesheet" href="/hostile.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.23/dist/turbo.es2017-umd.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>t3-feedback test page</h1>
+      <p>
+        The Widget below talks to the echo Receiver started by <code>npm run test-page</code>. It keeps each
+        Feedback instead of opening a Thread, and its "Open thread" link shows what it received.
+      </p>
+      <ul>
+        <li>The "Send feedback" button appears bottom right once the echo Receiver answers its health check.</li>
+        <li>Send a message and check the "Open thread" link: project, machine, message, pageUrl, viewport, and userAgent are filled in.</li>
+        <li>In the network panel, the POST to <code>/feedback</code> has no OPTIONS preflight before it.</li>
+        <li>Ctrl/Cmd+Enter sends, Escape closes, and Send is disabled while a send is in flight.</li>
+        <li>Stop the server and send again: the error and the Tailscale hint appear.</li>
+        <li>
+          This page loads a hostile stylesheet.
+          <button type="button" onclick="const sheet = document.getElementById('hostile'); sheet.disabled = !sheet.disabled">Toggle hostile CSS</button>
+          and the Widget looks the same either way.
+        </li>
+        <li><a href="/other.html">Go to another page with Turbo Drive</a>: the Widget stays, open and with its text, and is not duplicated.</li>
+        <li><a href="/offline.html" data-turbo="false">Open a page whose Machine never answers</a>: no button appears.</li>
+      </ul>
+    </main>
+    <script
+      src="/t3-feedback.js"
+      data-project="anovoselnik/t3-feedback"
+      data-machines='{"echo": "http://127.0.0.1:7778"}'
+    ></script>
+  </body>
+</html>

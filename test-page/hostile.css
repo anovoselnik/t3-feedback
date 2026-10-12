@@ -1,0 +1,48 @@
+/* Styles a WordPress theme might ship, aimed at everything the Widget is made of. */
+html {
+  font-size: 40px !important;
+  color-scheme: dark;
+}
+body {
+  background: #222;
+  color: #eee;
+  font-family: Georgia, serif;
+  line-height: 3;
+}
+* {
+  font-family: "Comic Sans MS", cursive !important;
+  letter-spacing: 2px !important;
+  box-sizing: content-box !important;
+  transition: all 2s !important;
+}
+button,
+textarea,
+a,
+div,
+span,
+p,
+form {
+  background: #f0f !important;
+  color: #0f0 !important;
+  border: 6px dashed red !important;
+  border-radius: 0 !important;
+  padding: 24px !important;
+  margin: 12px !important;
+  font-size: 28px !important;
+  text-transform: uppercase !important;
+}
+body > :last-child,
+[data-turbo-permanent],
+[id] {
+  position: static !important;
+  display: none !important;
+  opacity: 0.2 !important;
+  transform: rotate(8deg) !important;
+}
+main,
+main * {
+  display: revert !important;
+  position: revert !important;
+  opacity: revert !important;
+  transform: revert !important;
+}

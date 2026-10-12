@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>t3-feedback test page: another page</title>
+    <link id="hostile" rel="stylesheet" href="/hostile.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.23/dist/turbo.es2017-umd.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Another page</h1>
+      <p>Turbo Drive replaced the body. There should be exactly one Widget, in the state you left it.</p>
+      <p><a href="/">Back to the test page</a></p>
+    </main>
+    <script
+      src="/t3-feedback.js"
+      data-project="anovoselnik/t3-feedback"
+      data-machines='{"echo": "http://127.0.0.1:7778"}'
+    ></script>
+  </body>
+</html>
