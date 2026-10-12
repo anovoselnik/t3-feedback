@@ -34,7 +34,7 @@ test("answers the health probe without a Tailscale identity", async () => {
   const response = await fetch(`${base}/health`, { headers: { origin: pageOrigin } });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), pageOrigin);
-  assert.deepEqual(await response.json(), { machine: "echo", t3Reachable: false, echo: true });
+  assert.deepEqual(await response.json(), { machine: "echo", t3Reachable: false });
 });
 
 test("echoes a Feedback and links to a page that shows it", async () => {

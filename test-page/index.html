@@ -19,7 +19,7 @@
         <li>Send a message and check the "Open thread" link: project, machine, message, pageUrl, viewport, and userAgent are filled in.</li>
         <li>In the network panel, the POST to <code>/feedback</code> has no OPTIONS preflight before it.</li>
         <li>Ctrl/Cmd+Enter sends, Escape closes, and Send is disabled while a send is in flight.</li>
-        <li>Stop the server and send again: the error and the Tailscale hint appear.</li>
+        <li>Stop <code>npm run test-page</code> and send again: the error and the Tailscale hint appear.</li>
         <li>
           This page loads a hostile stylesheet.
           <button type="button" onclick="const sheet = document.getElementById('hostile'); sheet.disabled = !sheet.disabled">Toggle hostile CSS</button>

@@ -11,16 +11,16 @@ const PAGE_PORT = 7779;
 const pageOrigins = [`http://localhost:${PAGE_PORT}`, `http://127.0.0.1:${PAGE_PORT}`];
 
 const FILES = {
-  "/": ["test-page/index.html", "text/html"],
-  "/other.html": ["test-page/other.html", "text/html"],
-  "/offline.html": ["test-page/offline.html", "text/html"],
-  "/hostile.css": ["test-page/hostile.css", "text/css"],
-  "/t3-feedback.js": ["widget/t3-feedback.js", "text/javascript"],
+  "/": { path: "test-page/index.html", type: "text/html" },
+  "/other.html": { path: "test-page/other.html", type: "text/html" },
+  "/offline.html": { path: "test-page/offline.html", type: "text/html" },
+  "/hostile.css": { path: "test-page/hostile.css", type: "text/css" },
+  "/t3-feedback.js": { path: "widget/t3-feedback.js", type: "text/javascript" },
 };
 const root = new URL("../", import.meta.url);
 
 const receiver = createEchoReceiver({ machine: "echo", threadBaseUrl: `${pageOrigins[0]}/thread` });
-const logged = {
+const loggingReceiver = {
   ...receiver,
   async submit(feedback) {
     const result = await receiver.submit(feedback);
@@ -28,7 +28,7 @@ const logged = {
     return result;
   },
 };
-createHttpServer({ config: { allowedOrigins: pageOrigins }, receiver: logged, requireIdentity: false }).listen(
+createHttpServer({ config: { allowedOrigins: pageOrigins }, receiver: loggingReceiver, requireIdentity: false }).listen(
   RECEIVER_PORT,
   "127.0.0.1",
 );
@@ -40,9 +40,9 @@ createServer(async (request, response) => {
   if (pathname.startsWith("/never/")) return;
 
   // The echo Receiver's "Thread": the Feedback it received.
-  const thread = pathname.match(/^\/thread\/([\w-]+)$/);
-  if (thread) {
-    const feedback = receiver.received(thread[1]);
+  const threadId = pathname.match(/^\/thread\/([\w-]+)$/)?.[1];
+  if (threadId) {
+    const feedback = receiver.received(threadId);
     response.writeHead(feedback ? 200 : 404, { "content-type": "application/json" });
     response.end(JSON.stringify(feedback ?? { error: "No Feedback with that id" }, null, 2));
     return;
@@ -54,8 +54,8 @@ createServer(async (request, response) => {
     response.end("Not found");
     return;
   }
-  response.writeHead(200, { "content-type": file[1], "cache-control": "no-store" });
-  response.end(await readFile(new URL(file[0], root)));
+  response.writeHead(200, { "content-type": file.type, "cache-control": "no-store" });
+  response.end(await readFile(new URL(file.path, root)));
 }).listen(PAGE_PORT, "127.0.0.1", () => {
   console.log(`Test page on ${pageOrigins[0]}, echo Receiver on http://127.0.0.1:${RECEIVER_PORT}`);
 });

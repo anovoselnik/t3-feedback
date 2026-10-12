@@ -1,4 +1,4 @@
-// The t3-feedback Widget: a "Send feedback" button that sends a Feedback to a Receiver.
+// The t3-feedback Widget: shows a "Send feedback" button and sends each Feedback to a Receiver.
 // Classic script, no build step, no dependencies. Configured on its script tag:
 //   data-project="owner/name"
 //   data-machines='{"omarchy": "https://omarchy.example.ts.net:7777"}'
@@ -6,9 +6,12 @@
 (() => {
   "use strict";
 
-  const HOST_TAG = "t3-feedback-widget";
-  const HOST_ID = "t3-feedback-widget";
-  const PROBE_TIMEOUT_MS = 2500;
+  // Tag name and id of the element the Widget mounts into.
+  const HOST = "t3-feedback-widget";
+  // Leaves room for the Receiver's own check on T3 Code, which can take up to 2 seconds.
+  const PROBE_TIMEOUT_MS = 4000;
+  // Longer than the Receiver's own dispatch timeout, so a slow Thread start is not reported as a failure.
+  const SEND_TIMEOUT_MS = 150_000;
   const TAILSCALE_HINT = "Check that this device is connected to Tailscale.";
 
   // Turbo Drive runs the scripts of every new <body> again; the host from the first run is carried over.
@@ -18,11 +21,22 @@
   const config = readConfig(document.currentScript);
   if (!config) return;
 
-  probe(config.receiverUrl).then((online) => {
-    if (!online) return;
+  let probing = false;
+  let mounted = false;
+  const mountIfOnline = async () => {
+    if (probing || mounted) return;
+    probing = true;
+    const online = await probe(config.receiverUrl);
+    probing = false;
+    if (!online || mounted) return;
+    mounted = true;
     if (document.body) mount(config);
     else document.addEventListener("DOMContentLoaded", () => mount(config), { once: true });
-  });
+  };
+  mountIfOnline();
+  // A Machine that was offline, or a local-network prompt answered after the probe gave up,
+  // gets another chance on the next Turbo visit.
+  document.addEventListener("turbo:load", mountIfOnline);
 
   function readConfig(script) {
     const { project, machines, receiverPath = "" } = script?.dataset ?? {};
@@ -44,12 +58,14 @@
   // The Receiver's hostname resolves off the tailnet too, where requests hang instead of failing,
   // so the timeout is what keeps the button hidden for outsiders.
   async function probe(receiverUrl) {
+    let online;
     try {
-      const response = await fetch(`${receiverUrl}/health`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-      return response.ok;
+      online = (await fetch(`${receiverUrl}/health`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })).ok;
     } catch {
-      return false;
+      online = false;
     }
+    if (!online) console.info(`t3-feedback: no answer from ${receiverUrl}/health; check Tailscale and the Receiver's allowedOrigins`);
+    return online;
   }
 
   // A multipart body and no custom headers keep this a simple request, so there is no CORS preflight.
@@ -64,8 +80,11 @@
 
     let response;
     try {
-      response = await fetch(`${receiverUrl}/feedback`, { method: "POST", body });
-    } catch {
+      response = await fetch(`${receiverUrl}/feedback`, { method: "POST", body, signal: AbortSignal.timeout(SEND_TIMEOUT_MS) });
+    } catch (error) {
+      if (error.name === "TimeoutError") {
+        throw new Error(`The Receiver on ${machine} did not answer in time; the Thread may still have started.`);
+      }
       throw new Error(`Could not reach the Receiver on ${machine}.`);
     }
     const result = await response.json().catch(() => ({}));
@@ -85,8 +104,8 @@
   }
 
   function createHost() {
-    const host = document.createElement(HOST_TAG);
-    host.id = HOST_ID;
+    const host = document.createElement(HOST);
+    host.id = HOST;
     host.setAttribute("data-turbo-permanent", "");
     return host;
   }
@@ -180,6 +199,7 @@
       send();
     });
     panel.addEventListener("keydown", (event) => {
+      if (event.isComposing) return;
       if (event.key === "Escape") {
         event.preventDefault();
         close();
@@ -197,7 +217,7 @@
     // and the server-rendered page never does, so give it a placeholder to swap.
     document.addEventListener("turbo:before-render", (event) => {
       const { newBody } = event.detail;
-      if (!newBody.querySelector(`#${HOST_ID}`)) newBody.append(createHost());
+      if (!newBody.querySelector(`#${HOST}`)) newBody.append(createHost());
     });
 
     document.body.append(host);
