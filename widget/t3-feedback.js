@@ -14,7 +14,7 @@
   const SEND_TIMEOUT_MS = 150_000;
   const TAILSCALE_HINT = "Check that this device is connected to Tailscale.";
   // Larger images, and any that are not PNG or JPEG, are re-encoded as JPEG no larger than MAX_IMAGE_SIDE.
-  const MAX_IMAGE_BYTES = 1.5 * 1024 * 1024;
+  const REENCODE_ABOVE_BYTES = 1.5 * 1024 * 1024;
   const MAX_IMAGE_SIDE = 1920;
   const JPEG_QUALITY = 0.85;
 
@@ -84,27 +84,34 @@
   class ImageError extends Error {}
 
   async function normaliseImage(file) {
-    if ((file.type === "image/png" || file.type === "image/jpeg") && file.size <= MAX_IMAGE_BYTES) return file;
+    if ((file.type === "image/png" || file.type === "image/jpeg") && file.size <= REENCODE_ABOVE_BYTES) return file;
 
     let bitmap;
     try {
-      bitmap = await createImageBitmap(file);
+      // The canvas drops EXIF, so a phone photo's rotation has to be applied while decoding.
+      bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     } catch {
       throw new ImageError("This image could not be read; try a PNG or JPEG.");
     }
-    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const context = canvas.getContext("2d");
-    // JPEG has no transparency; without a background transparent pixels turn black.
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY));
-    if (!blob) throw new ImageError("This image could not be converted to JPEG.");
-    return blob;
+    try {
+      const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      const context = canvas.getContext("2d");
+      // JPEG has no transparency; without a background transparent pixels turn black.
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY));
+      if (!blob) throw new Error("toBlob returned nothing");
+      return blob;
+    } catch {
+      // Most likely the canvas ran past the browser's memory limit (getContext returns null on Safari).
+      throw new ImageError("This image could not be converted to JPEG.");
+    } finally {
+      bitmap.close();
+    }
   }
 
   // A multipart body and no custom headers keep this a simple request, so there is no CORS preflight.
@@ -116,7 +123,7 @@
     body.append("pageUrl", location.href);
     body.append("viewport", `${window.innerWidth}x${window.innerHeight}`);
     body.append("userAgent", navigator.userAgent);
-    if (image) body.append("image", image, image.type === "image/png" ? "screenshot.png" : "screenshot.jpg");
+    if (image) body.append("image", image, "screenshot");
 
     let response;
     try {
@@ -189,7 +196,7 @@
     root.querySelector(".meta").textContent = `To ${config.machine} · ${shortcut}`;
     let sending = false;
     // A promise of the normalised image, or null; a newer paste or pick replaces it.
-    let image = null;
+    let pendingImage = null;
     let thumbnailUrl = null;
 
     const open = () => {
@@ -203,6 +210,10 @@
       launcher.focus();
     };
 
+    const clearStatus = () => {
+      status.className = "status";
+      status.replaceChildren();
+    };
     const showSent = (threadUrl) => {
       const link = document.createElement("a");
       link.href = threadUrl;
@@ -233,24 +244,35 @@
     };
     const attach = (file) => {
       const pending = normaliseImage(file);
-      image = pending;
-      status.className = "status";
-      status.replaceChildren();
+      pendingImage = pending;
+      clearStatus();
+      // Re-encoding a large image takes a moment; the thumbnail replaces this once it is done.
+      attachButton.textContent = "Preparing image…";
       pending.then(
         (blob) => {
-          if (image === pending) showImage(blob);
+          if (pendingImage === pending) showImage(blob);
         },
         (error) => {
-          if (image !== pending) return;
-          image = null;
+          if (pendingImage !== pending) return;
+          pendingImage = null;
           showImage(null);
           showError(error);
         },
       );
     };
     const removeImage = () => {
-      image = null;
+      pendingImage = null;
       showImage(null);
+    };
+    // Waits for the image to finish preparing, following a remove or replace made in the meantime.
+    const currentImage = async () => {
+      let pending;
+      let blob;
+      do {
+        pending = pendingImage;
+        blob = await pending;
+      } while (pending !== pendingImage);
+      return { pending, blob };
     };
 
     const send = async () => {
@@ -265,13 +287,12 @@
       const refocus = root.activeElement === sendButton;
       sendButton.disabled = true;
       sendButton.textContent = "Sending…";
-      status.className = "status";
-      status.replaceChildren();
-      const attached = image;
+      clearStatus();
       try {
-        showSent(await submit(config, message, await attached));
+        const { pending, blob } = await currentImage();
+        showSent(await submit(config, message, blob));
         textarea.value = "";
-        if (image === attached) removeImage();
+        if (pendingImage === pending) removeImage();
       } catch (error) {
         showError(error);
       } finally {
@@ -316,8 +337,8 @@
         send();
       }
     });
-    // Keep the page's keyboard shortcuts from firing while typing in the Widget.
-    for (const type of ["keydown", "keyup", "keypress"]) {
+    // Keep the page's keyboard shortcuts and paste handlers from acting on what happens in the Widget.
+    for (const type of ["keydown", "keyup", "keypress", "paste"]) {
       panel.addEventListener(type, (event) => event.stopPropagation());
     }
 

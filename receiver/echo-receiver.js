@@ -29,15 +29,17 @@ export function createEchoReceiver({ machine, threadBaseUrl }) {
 // Reads the dimensions from a PNG's IHDR chunk or a JPEG's frame header, so the test page
 // shows whether the Widget downscaled an image. Other formats are not measured.
 function imageSize({ mimeType, bytes }) {
+  let size = null;
   try {
     if (mimeType === "image/png" && bytes.toString("latin1", 12, 16) === "IHDR") {
-      return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+      size = { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+    } else if (mimeType === "image/jpeg") {
+      size = jpegSize(bytes);
     }
-    if (mimeType === "image/jpeg") return jpegSize(bytes);
   } catch {
     // A truncated header falls through to no dimensions.
   }
-  return { width: null, height: null };
+  return size ?? { width: null, height: null };
 }
 
 function jpegSize(bytes) {
@@ -50,5 +52,5 @@ function jpegSize(bytes) {
     }
     offset += 2 + bytes.readUInt16BE(offset + 2);
   }
-  return { width: null, height: null };
+  return null;
 }
