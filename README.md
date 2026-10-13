@@ -18,9 +18,11 @@ A Machine needs:
 - T3 Code listening on loopback port 3773. On macOS the T3 Code desktop app does this.
 - Tailscale with HTTPS certificates enabled for the tailnet. On macOS, use the Tailscale app.
 - Git. On macOS it comes from the Xcode Command Line Tools (`xcode-select --install`).
+- `jq`, to look up your Tailscale login in step 3.
+- The `t3` CLI for step 2. If it is not on your PATH, run it through npx as the macOS command does.
 - Each T3 Code project cloned with an `origin` remote and an `origin/HEAD` ref. The Receiver refuses Feedback for a Project whose clone lacks the ref. Run `git remote set-head origin --auto` in that clone to add it.
 
-The Receiver runs `git fetch` as a background service, with no TTY or SSH agent. If the fetch cannot authenticate (an SSH key with a passphrase, for example), Threads still start, but from the local default branch, with a note in the Thread that the base may be stale.
+The Receiver runs `git fetch` as a background service, with no TTY or SSH agent. If the fetch cannot authenticate, as with an SSH key that has a passphrase, Threads still start, but from the local default branch, with a note in the Thread that the base may be stale.
 
 On macOS, keep the projects out of `~/Documents`, `~/Desktop` and `~/Downloads`. macOS blocks a background `node` from those folders until you grant it Full Disk Access.
 
@@ -50,7 +52,7 @@ On macOS, the desktop app does not put `t3` on the PATH, so run the CLI through 
 (umask 077; mkdir -p ~/.config/t3-feedback && npx -y t3@0.0.45 auth session issue --label t3-feedback --ttl 365d --token-only > ~/.config/t3-feedback/token)
 ```
 
-`t3 auth session list` (or `npx -y t3@0.0.45 auth session list`) shows the token with client `t3-feedback | bot` and its expiry.
+`t3 auth session list` shows the token with client `t3-feedback | bot` and its expiry.
 
 ### 3. Write the config
 
@@ -75,11 +77,13 @@ The Receiver reads `~/.config/t3-feedback/config.json`. [receiver/config.example
 EOF
 ```
 
+On the macOS laptop, `machine` is `macbook` and `webUiBaseUrl` is `https://antonios-laptop.tail8fd60a.ts.net`, where Tailscale Serve already proxies `/` to T3 Code on 3773.
+
 If `webUiBaseUrl` has no Tailscale Serve route yet, add one that proxies to T3 Code: `tailscale serve --bg http://127.0.0.1:3773`.
 
 ### 4. Install the service
 
-#### Linux: systemd user service
+#### Linux, with a systemd user service
 
 [receiver/t3-feedback-receiver.service](receiver/t3-feedback-receiver.service) starts the Receiver when you log in and restarts it 5 seconds after any failure. It looks for `node` on a PATH that includes the mise shims. If Node lives elsewhere, edit the `Environment=PATH=` line.
 
@@ -99,7 +103,7 @@ To update the Receiver later:
 git -C ~/.local/share/t3-feedback pull --ff-only && systemctl --user restart t3-feedback-receiver
 ```
 
-#### macOS: launchd agent
+#### macOS, with a launchd agent
 
 [receiver/t3-feedback-receiver.plist](receiver/t3-feedback-receiver.plist) starts the Receiver when you log in and starts it again whenever it exits with an error or gets killed. launchd waits at least 5 seconds between starts, so a crash loop stays slow.
 
@@ -130,7 +134,7 @@ After editing the plist, run `bootout` and then `bootstrap` again, because `kick
 
 launchd does not rotate `~/Library/Logs/t3-feedback-receiver.log`. Truncate it by hand if it grows.
 
-A LaunchAgent runs only while you are logged in, and a sleeping laptop answers nothing. The Widget's probe then times out and leaves the laptop out of the chooser.
+A LaunchAgent runs only while you are logged in, and a Mac that is asleep does not answer. The Widget's probe then times out and leaves that Machine out of the chooser.
 
 #### Check the log
 
@@ -138,18 +142,20 @@ On either system, the log shows `T3 Code environment <id>` and `Receiver for <ma
 
 ### 5. Expose it with Tailscale Serve
 
-The Receiver listens on loopback only. Tailscale Serve listens on the tailnet address on port 7777 and proxies to loopback port 7777, so the two do not collide. Serve keeps the Receiver on the tailnet; never expose it with Funnel.
+The Receiver listens on loopback only. Tailscale Serve listens on the tailnet address on port 7777 and proxies to loopback port 7777, so the two do not collide. Serve keeps port 7777 on the tailnet. Never publish it with Funnel.
+
+On macOS, Serve runs only while the Tailscale app is connected. The app installs `/usr/local/bin/tailscale` as a wrapper around its own CLI. If `tailscale` is not on your PATH, use the app's "Install CLI" setting, or run `/Applications/Tailscale.app/Contents/MacOS/tailscale` instead. On Linux, if `tailscale serve` reports that access is denied, run `sudo tailscale set --operator=$USER` once.
 
 ```sh
 tailscale serve --bg --https=7777 http://127.0.0.1:7777
 tailscale serve status
 ```
 
-To remove the route: `tailscale serve --https=7777 off`.
-
-On macOS, Serve runs only while the Tailscale app is connected. The app installs `/usr/local/bin/tailscale` as a wrapper around its own CLI. If `tailscale` is not on your PATH, use the app's "Install CLI" setting, or run `/Applications/Tailscale.app/Contents/MacOS/tailscale` instead.
+On the macOS laptop, `tailscale serve status` lists two routes, `/` to 3773 for the web UI and `:7777` to the Receiver. To remove the Receiver's route, run `tailscale serve --https=7777 off`.
 
 ### 6. Check it from another host on the tailnet
+
+Set `R` to this Machine's tailnet address on port 7777, and `machine=` to its label.
 
 ```sh
 R=https://omarchy.tail8fd60a.ts.net:7777
@@ -170,7 +176,7 @@ The `threadUrl` opens the Thread in any browser already paired with that T3 Code
 
 How the identity check behaves over the tailnet:
 
-- Serve sets `Tailscale-User-Login` from the caller's tailnet identity and overwrites any value the client sends, so a forged header gets replaced with the real login.
+- Serve sets `Tailscale-User-Login` from the caller's tailnet identity and overwrites any value the client sends, so the Receiver sees the real login even when a client forges the header.
 - A tailnet caller whose login is not `tailscaleLogin` gets 403 `Tailscale identity <login> is not allowed`.
 - A request that skips Serve and goes straight to `127.0.0.1:7777` has no identity header and gets 401.
 
@@ -189,7 +195,7 @@ Add this to the theme's `functions.php`. It prints the tag in the footer of fron
 
 ```php
 function t3_feedback_widget() {
-    $host = wp_parse_url( home_url(), PHP_URL_HOST );
+    $host = (string) wp_parse_url( home_url(), PHP_URL_HOST );
     if ( 'staging.cajanka.hr' !== $host && ! str_ends_with( $host, '.local' ) ) return;
     wp_print_script_tag( array(
         'src'           => 'https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@v0.1.0/widget/t3-feedback.js',
@@ -213,7 +219,7 @@ The Widget works with Turbo Drive without extra setup. It marks its host element
 
 ### Vite
 
-Put this in the app's entry module, such as `src/main.ts`. Vite has no way to leave a tag out of `index.html` for one environment, so the entry module adds the tag at runtime, and only on the staging hostname.
+Put this in the app's entry module, such as `src/main.ts`. It adds the tag at runtime, and only on the staging hostname, so no production page loads the Widget.
 
 ```js
 if (location.hostname === "staging.example.com") {
@@ -229,13 +235,13 @@ if (location.hostname === "staging.example.com") {
 
 Chrome 142+ and Firefox 151+ treat Tailscale addresses as local, so the Widget's first probe makes the browser ask once per Staging page origin whether the page may reach devices on your local network. Allow it. The probe waits for your answer for at most 4 seconds. If you answer later, the button stays hidden until the next page load or Turbo visit. Safari does not ask today.
 
-If you deny the prompt, the browser remembers that for the origin, and the button never appears there again. To undo a denial, open the Staging page, click the icon at the left of the address bar, and reset the local network permission. In Chrome that is under Site settings, where you set it back to Ask or Allow. In Firefox the permission is listed in the panel the icon opens; clear it there. Then reload.
+If you deny the prompt, the browser remembers that for the origin, and the button never appears there again. To undo a denial, open the Staging page, click the icon at the left of the address bar, and reset the local network permission. In Chrome that is under Site settings, where you set it back to Ask or Allow. Firefox lists the permission in the panel the icon opens, where you can clear it. Then reload.
 
 ## Visitors off the tailnet
 
 The Widget shows its button only when a probe of some Machine's `/health` succeeds within 4 seconds. A visitor who is not on your tailnet cannot reach any Receiver, so the button never appears for them.
 
-For most Machines the probe fails right away, because the tailnet hostname does not resolve outside the tailnet. omarchy has Funnel enabled, so its tailnet hostname resolves publicly, and an off-tailnet probe hangs instead of failing. The probe's 4-second timeout is what keeps the Widget hidden there.
+For most Machines the probe fails right away, because the tailnet hostname does not resolve outside the tailnet. omarchy is the exception. It has Funnel enabled, which puts its tailnet hostname in public DNS, so an off-tailnet probe hangs instead of failing. The probe's 4-second timeout is what keeps the button hidden there.
 
 ## Try it locally
 
@@ -271,4 +277,4 @@ jsDelivr caches a tagged file permanently, so a change to `widget/` reaches a St
    ```
 
 4. Set `WIDGET_RELEASE` in `test-page/serve.js` to the new tag, run `npm run test-page -- --jsdelivr`, and check that the test page works with the released file.
-5. Move the remaining embed URLs to the new tag: every URL in this README, and each Project's script tag (for Cajanka, `inc/t3-feedback.php` in the theme).
+5. Move every embed URL in this README to the new tag. Then update each Project's script tag. For Cajanka, that tag is in `inc/t3-feedback.php` in the theme.

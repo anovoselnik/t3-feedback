@@ -158,7 +158,7 @@ One public repository, `anovoselnik/t3-feedback`, holding the Widget, the Receiv
 
 ### Cajanka wiring
 
-A footer hook in the theme, on both `wp_footer` and `admin_footer`, echoes the script tag when the request host is `staging.cajanka.hr` or ends in `.local`. Rails and Vite snippets are documented in the README only.
+A footer hook in the theme, on both `wp_footer` and `admin_footer`, echoes the script tag when the site's host (from `home_url()`, not the request's `Host` header) is `staging.cajanka.hr` or ends in `.local`. Rails and Vite snippets are documented in the README only.
 
 ### Per-Machine setup (documented, not automated in v1)
 
