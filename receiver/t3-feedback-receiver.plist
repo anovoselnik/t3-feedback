@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   launchd agent for the t3-feedback Receiver: opens a T3 Code Thread for each Feedback.
-  launchd expands neither ~ nor $HOME, so docs/setup-macos.md replaces __HOME__ and
+  launchd expands neither ~ nor $HOME, so the README install step replaces __HOME__ and
   __NODE__ (the absolute path of a Node 22+ binary) when it installs this file.
 -->
 <plist version="1.0">
