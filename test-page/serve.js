@@ -54,8 +54,9 @@ const receivers = echoMachines.map(({ receiver }) => receiver);
 // While it is off, its port refuses connections, so both the health probe and a send fail.
 function setOnline({ machine, port, server }, online) {
   if (online === server.listening) return;
-  if (online) server.listen(port, "127.0.0.1");
-  else {
+  if (online) {
+    server.listen(port, "127.0.0.1");
+  } else {
     server.close();
     server.closeAllConnections();
   }

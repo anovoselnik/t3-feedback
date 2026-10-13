@@ -64,7 +64,8 @@
         <li>
           Stop <code>npm run test-page</code> and send again: the error names the chosen Machine, with the Tailscale hint,
           and that Machine leaves the chooser. Send once more with neither left: the panel stays open with the message
-          and says no Machine is online. Restart the server and reopen the panel: both Machines are back.
+          and says no Machine is online. Close the panel: the button is gone. Restart the server, then switch to another
+          tab and back: the button returns, and the panel still has the message and both Machines.
         </li>
         <li>
           This page loads a hostile stylesheet.

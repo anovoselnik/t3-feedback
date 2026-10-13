@@ -248,6 +248,7 @@
       const index = machines.indexOf(machine);
       const next = [...chooser.options].find(({ value }) => machines.findIndex(({ label }) => label === value) > index);
       chooser.add(new Option(machine.label), next);
+      if (panel.hidden) launcher.hidden = false;
       if (!userChose) applyDefault();
     };
     const removeMachine = ({ label }) => {
@@ -272,7 +273,8 @@
     };
     const close = () => {
       panel.hidden = true;
-      launcher.hidden = false;
+      // With every Machine gone after failed sends, the button stays away until a probe finds one again.
+      launcher.hidden = chooser.options.length === 0;
       launcher.focus();
     };
 
