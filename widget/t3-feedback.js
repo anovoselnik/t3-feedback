@@ -27,22 +27,39 @@
   const config = readConfig(document.currentScript);
   if (!config) return;
 
-  let probing = false;
-  let mounted = false;
-  const mountIfOnline = async () => {
-    if (probing || mounted) return;
-    probing = true;
-    const online = await onlineMachines(config.machines);
-    probing = false;
-    if (!online.length || mounted) return;
-    mounted = true;
-    if (document.body) mount(config, online);
-    else document.addEventListener("DOMContentLoaded", () => mount(config, online), { once: true });
+  // Labels of the Machines that answered and have not failed a send since.
+  const online = new Set();
+  const probing = new Set();
+  // Set once the first answer arrives; until the Widget is in the page, arrivals only join `online`.
+  let mountScheduled = false;
+  let widget = null;
+
+  // Each Machine is probed on its own, so the first answer mounts the Widget without waiting for the rest.
+  const probeMachine = async (machine) => {
+    if (online.has(machine.label) || probing.has(machine.label)) return;
+    probing.add(machine.label);
+    const answered = await probe(machine.receiverUrl);
+    probing.delete(machine.label);
+    if (!answered || online.has(machine.label)) return;
+    online.add(machine.label);
+    if (widget) widget.addMachine(machine);
+    else if (!mountScheduled) {
+      mountScheduled = true;
+      const mountNow = () => (widget = mount(config, { online, probeOffline }));
+      if (document.body) mountNow();
+      else document.addEventListener("DOMContentLoaded", mountNow, { once: true });
+    }
   };
-  mountIfOnline();
-  // A Machine that was offline, or a local-network prompt answered after the probe gave up,
-  // gets another chance on the next Turbo visit.
-  document.addEventListener("turbo:load", mountIfOnline);
+  // A Machine that was asleep, or a local-network prompt answered after a probe gave up, gets another
+  // chance when the panel opens, when the tab is shown again, and on each Turbo visit.
+  const probeOffline = () => {
+    for (const machine of config.machines) probeMachine(machine);
+  };
+  probeOffline();
+  document.addEventListener("turbo:load", probeOffline);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") probeOffline();
+  });
 
   function readConfig(script) {
     const { project, machines, receiverPath = "" } = script?.dataset ?? {};
@@ -61,13 +78,6 @@
       return null;
     }
     return { project, machines: machineList };
-  }
-
-  // Probes every Machine at once and keeps the ones that answered, in the order they were configured.
-  // The whole probe takes as long as the slowest Machine, at most PROBE_TIMEOUT_MS.
-  async function onlineMachines(machines) {
-    const answers = await Promise.all(machines.map((machine) => probe(machine.receiverUrl)));
-    return machines.filter((machine, index) => answers[index]);
   }
 
   // The Receiver's hostname resolves off the tailnet too, where requests hang instead of failing,
@@ -110,6 +120,8 @@
 
   // Shown without the Tailscale hint: the image, not the connection, is the problem.
   class ImageError extends Error {}
+  // The request never reached the Receiver, so its Machine leaves the chooser until a probe finds it again.
+  class UnreachableError extends Error {}
 
   async function normaliseImage(file) {
     if ((file.type === "image/png" || file.type === "image/jpeg") && file.size <= REENCODE_ABOVE_BYTES) return file;
@@ -160,7 +172,7 @@
       if (error.name === "TimeoutError") {
         throw new Error(`The Receiver on ${machine} did not answer in time; the Thread may still have started.`);
       }
-      throw new Error(`Could not reach the Receiver on ${machine}.`);
+      throw new UnreachableError(`Could not reach the Receiver on ${machine}.`);
     }
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || `The Receiver on ${machine} answered ${response.status}.`);
@@ -185,8 +197,8 @@
     return host;
   }
 
-  // Mounts the Widget with the Machines that answered the probe; the chooser offers only those.
-  function mount({ project }, machines) {
+  // Mounts the Widget with the Machines that have answered so far; addMachine lists each later one.
+  function mount({ project, machines }, { online, probeOffline }) {
     const host = createHost();
     const root = host.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${STYLE}</style>
@@ -223,17 +235,37 @@
     const picker = root.querySelector(".picker");
     const chooser = root.querySelector(".machine");
     root.querySelector(".shortcut").textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘+Enter" : "Ctrl+Enter";
-    for (const { label } of machines) chooser.append(new Option(label));
+    const chosenMachine = () => machines.find(({ label }) => label === chooser.value);
+    // Until the user picks a Machine, each arrival re-applies the default.
+    let userChose = false;
     // The Machine used last time on this site, when it is online; otherwise the first online one.
-    const remembered = rememberedMachine();
-    chooser.selectedIndex = Math.max(0, machines.findIndex(({ label }) => label === remembered));
-    const chosenMachine = () => machines[chooser.selectedIndex];
+    const applyDefault = () => {
+      const remembered = rememberedMachine();
+      chooser.selectedIndex = Math.max(0, [...chooser.options].findIndex(({ value }) => value === remembered));
+    };
+    // Options stay in configured order: each goes before the first listed Machine configured after it.
+    const addMachine = (machine) => {
+      const index = machines.indexOf(machine);
+      const next = [...chooser.options].find(({ value }) => machines.findIndex(({ label }) => label === value) > index);
+      chooser.add(new Option(machine.label), next);
+      if (!userChose) applyDefault();
+    };
+    const removeMachine = ({ label }) => {
+      online.delete(label);
+      const option = [...chooser.options].find(({ value }) => value === label);
+      if (!option) return;
+      const wasChosen = option.selected;
+      option.remove();
+      if (wasChosen) applyDefault();
+    };
+    for (const machine of machines) if (online.has(machine.label)) addMachine(machine);
     let sending = false;
     // A promise of the normalised image, or null; a newer paste or pick replaces it.
     let pendingImage = null;
     let thumbnailUrl = null;
 
     const open = () => {
+      probeOffline();
       launcher.hidden = true;
       panel.hidden = false;
       textarea.focus();
@@ -325,12 +357,18 @@
       // Taken now, so changing the chooser during a send does not change where this Feedback goes.
       const machine = chosenMachine();
       try {
+        if (!machine) {
+          // The chooser fills in again if a Machine answers this round.
+          probeOffline();
+          throw new Error("No Machine is online right now.");
+        }
         const { pending, blob } = await currentImage();
         showSent(await submit(project, machine, message, blob));
         rememberMachine(machine.label);
         textarea.value = "";
         if (pendingImage === pending) removeImage();
       } catch (error) {
+        if (error instanceof UnreachableError) removeMachine(machine);
         showError(error);
       } finally {
         sending = false;
@@ -340,6 +378,9 @@
       }
     };
 
+    chooser.addEventListener("change", () => {
+      userChose = true;
+    });
     launcher.addEventListener("click", open);
     root.querySelector(".close").addEventListener("click", close);
     // Only an image paste is taken over; text pastes into the textarea as usual.
@@ -387,6 +428,7 @@
     });
 
     document.body.append(host);
+    return { addMachine };
   }
 
   // Pixel units only: rem would follow the host page's root font size.
