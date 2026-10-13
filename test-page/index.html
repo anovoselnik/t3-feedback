@@ -21,9 +21,8 @@
       </p>
       <ul>
         <li>
-          The "Send feedback" button appears bottom right once every probe has answered or given up: about 4 s here,
-          because <code>nowhere</code> only gives up at the timeout. The chooser lists <code>echo</code> and
-          <code>echo2</code> only.
+          The "Send feedback" button appears bottom right as soon as <code>echo</code> answers, without waiting the 4 s
+          it takes <code>nowhere</code> to give up. The chooser lists <code>echo</code> and <code>echo2</code> only.
         </li>
         <li>
           <button type="button" onclick="localStorage.removeItem('t3-feedback:machine')">Forget the remembered Machine</button>
@@ -42,7 +41,32 @@
           over about 1.5 MB, or one that is not PNG or JPEG, arrives as a JPEG no wider or taller than 1920 px.
         </li>
         <li>Ctrl/Cmd+Enter sends, Escape closes, and Send is disabled while a send is in flight.</li>
-        <li>Stop <code>npm run test-page</code> and send again: the error names the chosen Machine, with the Tailscale hint.</li>
+        <li>
+          <button type="button" onclick="fetch('/machines/echo2/offline', { method: 'POST' })">Take echo2 offline</button>
+          <button type="button" onclick="fetch('/machines/echo2/online', { method: 'POST' })">Bring echo2 online</button>
+          <ul>
+            <li>
+              Choose <code>echo2</code>, take it offline, and send: the error names <code>echo2</code>, with the Tailscale
+              hint, the message stays, and <code>echo2</code> leaves the chooser.
+            </li>
+            <li>
+              Bring <code>echo2</code> online, close the panel and open it again: <code>echo2</code> is back in the chooser,
+              after <code>echo</code>. Switching to another tab and back has the same effect.
+            </li>
+            <li>
+              Send once to <code>echo2</code> so it is remembered, take it offline, and reload: the chooser shows
+              <code>echo</code> alone. Bring <code>echo2</code> online and reopen the panel: <code>echo2</code> joins and is
+              selected. Repeat, but pick <code>echo</code> in the chooser before bringing <code>echo2</code> back:
+              <code>echo2</code> joins and <code>echo</code> stays selected.
+            </li>
+          </ul>
+        </li>
+        <li>
+          Stop <code>npm run test-page</code> and send again: the error names the chosen Machine, with the Tailscale hint,
+          and that Machine leaves the chooser. Send once more with neither left: the panel stays open with the message
+          and says no Machine is online. Close the panel: the button is gone. Restart the server, then switch to another
+          tab and back: the button returns, and the panel still has the message and both Machines.
+        </li>
         <li>
           This page loads a hostile stylesheet.
           <button type="button" onclick="const sheet = document.getElementById('hostile'); sheet.disabled = !sheet.disabled">Toggle hostile CSS</button>

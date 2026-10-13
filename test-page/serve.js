@@ -34,7 +34,7 @@ const widgetUrl = options.jsdelivr
   ? `https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@${WIDGET_RELEASE}/widget/t3-feedback.js`
   : LOCAL_WIDGET;
 
-const receivers = MACHINES.map(({ machine, port }) => {
+const echoMachines = MACHINES.map(({ machine, port }) => {
   const receiver = createEchoReceiver({ machine, threadBaseUrl: `${pageOrigins[0]}/thread` });
   const loggingReceiver = {
     ...receiver,
@@ -44,18 +44,39 @@ const receivers = MACHINES.map(({ machine, port }) => {
       return result;
     },
   };
-  createHttpServer({ config: { allowedOrigins: pageOrigins }, receiver: loggingReceiver, requireIdentity: false }).listen(
-    port,
-    "127.0.0.1",
-  );
-  return receiver;
+  const server = createHttpServer({ config: { allowedOrigins: pageOrigins }, receiver: loggingReceiver, requireIdentity: false });
+  server.listen(port, "127.0.0.1");
+  return { machine, port, receiver, server };
 });
+const receivers = echoMachines.map(({ receiver }) => receiver);
+
+// Takes an echo Receiver off the network or puts it back, like a Machine going to sleep and waking up.
+// While it is off, its port refuses connections, so both the health probe and a send fail.
+function setOnline({ machine, port, server }, online) {
+  if (online === server.listening) return;
+  if (online) {
+    server.listen(port, "127.0.0.1");
+  } else {
+    server.close();
+    server.closeAllConnections();
+  }
+  console.log(`${machine} is ${online ? "online" : "offline"}`);
+}
 
 createServer(async (request, response) => {
   const { pathname } = new URL(request.url, "http://page");
 
   // The "nowhere" Machine points the Widget here, where the health probe never gets an answer.
   if (pathname.startsWith("/never/")) return;
+
+  const toggle = pathname.match(/^\/machines\/([\w-]+)\/(online|offline)$/);
+  if (toggle && request.method === "POST") {
+    const echoMachine = echoMachines.find(({ machine }) => machine === toggle[1]);
+    if (echoMachine) setOnline(echoMachine, toggle[2] === "online");
+    response.writeHead(echoMachine ? 204 : 404);
+    response.end();
+    return;
+  }
 
   // An echo Receiver's "Thread": the Feedback it received. Thread ids are unique across both.
   const threadId = pathname.match(/^\/thread\/([\w-]+)$/)?.[1];
