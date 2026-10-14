@@ -1,15 +1,15 @@
 # Release the widget
 
-Staging pages load the widget from jsDelivr at a release tag, never from a branch:
+Staging pages load the widget from jsDelivr at the major-version range `@0`:
 
 ```
-https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@v0.2.0/widget/t3-feedback.js
+https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@0/widget/t3-feedback.js
 ```
 
-jsDelivr caches a tagged file permanently, so a change to `widget/` reaches a staging page only when its embed URL moves to a new tag. To release one:
+jsDelivr resolves `@0` to the highest `v0.x.y` tag. A change to `widget/` reaches staging pages only when you tag a release, never from a branch. To release one:
 
 1. Merge the widget change to `main`.
-2. Tag `main` with the next version and push the tag. Never move or reuse a tag, because jsDelivr would keep serving the old file.
+2. Tag `main` with the next version and push the tag. Never move or reuse a tag, because jsDelivr stores each tagged file permanently and would keep serving the old one.
 
    ```sh
    git fetch origin
@@ -17,11 +17,22 @@ jsDelivr caches a tagged file permanently, so a change to `widget/` reaches a st
    git push origin v0.3.0
    ```
 
-3. Check that jsDelivr serves the new file as JavaScript. Expect `HTTP/2 200` and a `content-type` starting with `application/javascript`:
+3. Purge jsDelivr's cache of `@0`, so it serves the new release now rather than within 12 hours:
 
    ```sh
-   curl -sI https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@v0.3.0/widget/t3-feedback.js
+   curl -s https://purge.jsdelivr.net/gh/anovoselnik/t3-feedback@0/widget/t3-feedback.js
    ```
 
-4. Set `WIDGET_RELEASE` in `test-page/serve.js` to the new tag, run `npm run test-page -- --jsdelivr`, and check that the test page works with the released file.
-5. Move every embed URL in the docs to the new tag. `grep -rl '@v0.2.0' README.md guides docs` lists the files. Then update the script tag in each project that embeds the widget.
+4. Check that `@0` resolves to the new tag. Expect `HTTP/2 200`, a `content-type` starting with `application/javascript`, and `x-jsd-version: 0.3.0`:
+
+   ```sh
+   curl -sI https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@0/widget/t3-feedback.js
+   ```
+
+5. Run `npm run test-page -- --jsdelivr` and check that the test page works with the released file.
+
+Browsers cache the `@0` file for up to 7 days, so a page you visited before the release may keep the old widget until you hard-reload it.
+
+## Breaking changes
+
+A change that breaks existing embeds, such as renaming a `data-` attribute, is a new major version. Tag it `v1.0.0` and change `@0` to `@1` in the README, the guides, and `test-page/serve.js`. Existing sites stay on the last 0.x release until their embed moves to `@1`.

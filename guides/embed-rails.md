@@ -5,7 +5,7 @@ Put this before `</body>` in `app/views/layouts/application.html.erb`. It assume
 ```erb
 <% if Rails.env.staging? %>
   <script
-    src="https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@v0.2.0/widget/t3-feedback.js"
+    src="https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@0/widget/t3-feedback.js"
     data-project="your-github-user/your-app"
     data-machines='{"desktop": "https://desktop.tail1234.ts.net:7777", "laptop": "https://laptop.tail1234.ts.net:7777"}'
   ></script>
