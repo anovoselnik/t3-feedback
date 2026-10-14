@@ -15,6 +15,8 @@
   // Longer than the Receiver's own dispatch timeout, so a slow Thread start is not reported as a failure.
   const SEND_TIMEOUT_MS = 150_000;
   const TAILSCALE_HINT = "Check that this device is connected to Tailscale.";
+  // Remembers, per site and device, whether "Open thread" goes to the T3 Code app instead of the browser.
+  const OPEN_IN_APP_KEY = "t3-feedback:open-in-app";
   // Larger images, and any that are not PNG or JPEG, are re-encoded as JPEG no larger than MAX_IMAGE_SIDE.
   const REENCODE_ABOVE_BYTES = 1.5 * 1024 * 1024;
   const MAX_IMAGE_SIDE = 1920;
@@ -178,7 +180,7 @@
     if (!response.ok) throw new Error(result.error || `The Receiver on ${machine} answered ${response.status}.`);
     const threadUrl = httpUrl(result.threadUrl);
     if (!threadUrl) throw new Error(`The Receiver on ${machine} did not return a Thread link.`);
-    return threadUrl;
+    return { threadUrl, appUrl: appUrl(result.appUrl) };
   }
 
   function httpUrl(value) {
@@ -188,6 +190,30 @@
     } catch {
       return null;
     }
+  }
+
+  // Null from a Receiver too old to send one; the browser link is used instead.
+  function appUrl(value) {
+    try {
+      return new URL(value).protocol === "t3code:" ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Storage can be blocked or full; the setting then lasts only until the page reloads.
+  function readOpenInApp() {
+    try {
+      return localStorage.getItem(OPEN_IN_APP_KEY) === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  function saveOpenInApp(value) {
+    try {
+      localStorage.setItem(OPEN_IN_APP_KEY, String(value));
+    } catch {}
   }
 
   function createHost() {
@@ -218,6 +244,7 @@
           <input class="picker" type="file" accept="image/*" hidden />
         </div>
         <p class="status" role="status"></p>
+        <label class="open-in-app"><input type="checkbox" /> Open threads in the T3 Code app</label>
         <div class="footer">
           <span class="meta">To <select class="machine" aria-label="Machine"></select> · <span class="shortcut"></span></span>
           <button class="send" type="submit">Send</button>
@@ -260,10 +287,14 @@
       if (wasChosen) applyDefault();
     };
     for (const machine of machines) if (online.has(machine.label)) addMachine(machine);
+    const openInApp = root.querySelector(".open-in-app input");
+    openInApp.checked = readOpenInApp();
     let sending = false;
     // A promise of the normalised image, or null; a newer paste or pick replaces it.
     let pendingImage = null;
     let thumbnailUrl = null;
+    // The links of the last Thread, while "Sent" is showing.
+    let sentLinks = null;
 
     const open = () => {
       probeOffline();
@@ -279,15 +310,22 @@
     };
 
     const clearStatus = () => {
+      sentLinks = null;
       status.className = "status";
       status.replaceChildren();
     };
-    const showSent = (threadUrl) => {
+    const showSent = (links) => {
+      sentLinks = links;
       const link = document.createElement("a");
-      link.href = threadUrl;
-      link.target = "_blank";
-      link.rel = "noopener";
       link.textContent = "Open thread";
+      if (openInApp.checked && links.appUrl) {
+        // A new tab would stay blank once the app takes the link.
+        link.href = links.appUrl;
+      } else {
+        link.href = links.threadUrl;
+        link.target = "_blank";
+        link.rel = "noopener";
+      }
       status.className = "status sent";
       status.replaceChildren("Sent. ", link);
     };
@@ -392,6 +430,10 @@
       event.preventDefault();
       attach(file);
     });
+    openInApp.addEventListener("change", () => {
+      saveOpenInApp(openInApp.checked);
+      if (sentLinks) showSent(sentLinks);
+    });
     attachButton.addEventListener("click", () => picker.click());
     picker.addEventListener("change", () => {
       const [file] = picker.files;
@@ -447,7 +489,7 @@
     }
     *, *::before, *::after { box-sizing: border-box; }
     [hidden] { display: none !important; }
-    button, textarea, select { font: inherit; color: inherit; margin: 0; }
+    button, textarea, select, input { font: inherit; color: inherit; margin: 0; }
     button { cursor: pointer; }
     .launcher {
       padding: 10px 16px;
@@ -511,6 +553,8 @@
       font-size: 12px;
       cursor: pointer;
     }
+    .open-in-app { display: flex; align-items: center; gap: 6px; color: #52525b; font-size: 12px; cursor: pointer; }
+    .open-in-app input { width: 14px; height: 14px; accent-color: #2563eb; cursor: pointer; }
     .attachment { display: flex; align-items: center; gap: 8px; }
     .preview { position: relative; display: inline-block; }
     .thumbnail {

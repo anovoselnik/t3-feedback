@@ -9,7 +9,7 @@ A "Send feedback" button for your staging sites. Type what's wrong, paste a scre
 1. You add one `<script>` tag to your staging site. It shows a small feedback button.
 2. You write a message and paste or attach a screenshot. The button sends it over your [Tailscale](https://tailscale.com) network to a small service on the machine you pick.
 3. That service opens a new T3 Code thread in a fresh git worktree of the right project. The thread includes your message, the screenshot, the page URL, and the viewport size, and the agent starts right away.
-4. The button shows an "Open thread" link.
+4. The button shows an "Open thread" link. It opens the web UI, or the T3 Code desktop app (v0.0.46 or newer) if you tick "Open threads in the T3 Code app".
 
 Only you see the button. It shows up only when your device can reach one of your machines over Tailscale. Visitors off your tailnet never see it.
 

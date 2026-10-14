@@ -40,6 +40,10 @@
           The "Open thread" link shows the image's type, size, and dimensions. A small PNG arrives unchanged; an image
           over about 1.5 MB, or one that is not PNG or JPEG, arrives as a JPEG no wider or taller than 1920 px.
         </li>
+        <li>
+          Tick "Open threads in the T3 Code app": the "Open thread" link changes to <code>t3code://threads/echo/…</code>
+          and opens in the same tab. Reload the page and the box is still ticked.
+        </li>
         <li>Ctrl/Cmd+Enter sends, Escape closes, and Send is disabled while a send is in flight.</li>
         <li>
           <button type="button" onclick="fetch('/machines/echo2/offline', { method: 'POST' })">Take echo2 offline</button>

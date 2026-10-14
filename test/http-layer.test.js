@@ -165,6 +165,7 @@ test("opens a Thread for a text-only Feedback and returns its URL", async () => 
   assert.deepEqual(await response.json(), {
     threadId: command.threadId,
     threadUrl: `https://omarchy.example.ts.net/env-1/${command.threadId}`,
+    appUrl: `t3code://threads/env-1/${command.threadId}`,
   });
   assert.equal(command.bootstrap.createThread.projectId, "p-site");
   assert.equal(command.bootstrap.createThread.title, "Feedback: Button is misaligned");
