@@ -17,19 +17,15 @@ jsDelivr resolves `@latest` to the highest semver tag. A change to `widget/` rea
    git push origin v0.3.0
    ```
 
-3. Purge jsDelivr's cache of `@latest`, so it serves the new release now rather than within 12 hours:
+3. Pushing the tag runs the [Release widget](../.github/workflows/release-widget.yml) workflow. It purges jsDelivr's cache of `@latest`, so the release goes live at once rather than within 12 hours, and passes once `@latest` serves the new tag as JavaScript. Watch it:
 
    ```sh
-   curl -s https://purge.jsdelivr.net/gh/anovoselnik/t3-feedback@latest/widget/t3-feedback.js
+   gh run watch "$(gh run list --workflow release-widget.yml --limit 1 --json databaseId -q '.[0].databaseId')"
    ```
 
-4. Check that `@latest` resolves to the new tag. Expect `HTTP/2 200`, a `content-type` starting with `application/javascript`, and `x-jsd-version: 0.3.0`:
+   If it fails, purge by hand with `curl -s https://purge.jsdelivr.net/gh/anovoselnik/t3-feedback@latest/widget/t3-feedback.js`, then check `x-jsd-version` in `curl -sI https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@latest/widget/t3-feedback.js`.
 
-   ```sh
-   curl -sI https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@latest/widget/t3-feedback.js
-   ```
-
-5. Run `npm run test-page -- --jsdelivr` and check that the test page works with the released file.
+4. Run `npm run test-page -- --jsdelivr` and check that the test page works with the released file.
 
 Browsers cache the `@latest` file for up to 7 days, so a page you visited before the release may keep the old widget until you hard-reload it.
 

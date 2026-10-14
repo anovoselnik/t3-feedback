@@ -1,0 +1,35 @@
+name: Release widget
+
+# Staging pages load the widget from jsDelivr at @latest, which jsDelivr caches for up to 12 hours.
+# On each release tag, purge that cache and wait until @latest serves the new tag.
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  purge-jsdelivr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Purge @latest and wait for jsDelivr to serve the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          path="gh/$GITHUB_REPOSITORY@latest/widget/t3-feedback.js"
+          want="${TAG#v}"
+          for attempt in $(seq 1 20); do
+            curl -fsS "https://purge.jsdelivr.net/$path" > /dev/null || true
+            headers=$(curl -fsSI "https://cdn.jsdelivr.net/$path" | tr -d '\r' || true)
+            version=$(awk -F': ' 'tolower($1) == "x-jsd-version" { print $2 }' <<< "$headers")
+            type=$(awk -F': ' 'tolower($1) == "content-type" { print $2 }' <<< "$headers")
+            if [ "$version" = "$want" ] && [[ "$type" == application/javascript* ]]; then
+              echo "@latest serves $version as $type"
+              exit 0
+            fi
+            echo "Attempt $attempt: @latest serves ${version:-nothing} as ${type:-nothing}, want $want"
+            sleep 30
+          done
+          echo "::error::jsDelivr did not serve $TAG at @latest within 10 minutes"
+          exit 1
