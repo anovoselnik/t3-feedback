@@ -60,7 +60,7 @@ Identify the stack, then follow its guide:
 
 For any other stack, add the plain script tag from the "Set up" section of `https://raw.githubusercontent.com/anovoselnik/t3-feedback/main/README.md` to the HTML layout, behind whatever check the project already uses to tell staging from production.
 
-Fill in the slug from step 1. Build `data-machines` from step 1, using each receiver's `machine` name as the key and `https://<hostname>:7777` as the value. Keep the `@0` version in the URL, so the site picks up new widget releases.
+Fill in the slug from step 1. Build `data-machines` from step 1, using each receiver's `machine` name as the key and `https://<hostname>:7777` as the value. Keep `@latest` in the URL, so the site picks up new widget releases.
 
 The tag must render on staging hosts only, and it must be a classic script, without `type="module"`.
 

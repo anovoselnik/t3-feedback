@@ -15,8 +15,8 @@ const MACHINES = [
   { machine: "echo2", port: 7780 },
 ];
 const PAGE_PORT = 7779;
-// The version range that Staging pages embed: the newest 0.x release.
-const WIDGET_RELEASE = "0";
+// Staging pages embed the newest release.
+const WIDGET_RELEASE = "latest";
 const LOCAL_WIDGET = "/t3-feedback.js";
 const pageOrigins = [`http://localhost:${PAGE_PORT}`, `http://127.0.0.1:${PAGE_PORT}`];
 

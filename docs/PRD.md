@@ -41,7 +41,7 @@ The button is only visible to me: it appears only on non-production deployments 
 25. As the developer, I want the Widget to keep working after a Turbo Drive navigation in a Rails app, so that it does not vanish or duplicate.
 26. As the developer, I want the Widget visually isolated from the host site's CSS, so that a WordPress theme cannot break it.
 27. As the developer, I want one hosted script URL used by every project, so that fixing the Widget once fixes it everywhere.
-28. As the developer, I want the script URL to follow the newest release of the current major version, so that Widget fixes reach every staging site without editing embeds, and a breaking change never does.
+28. As the developer, I want the script URL to follow the newest release, so that Widget fixes reach every staging site without editing embeds.
 29. As the developer, I want one-line embed snippets for WordPress, Rails, and Vite, so that adding a project is trivial.
 30. As the developer, I want the WordPress embed to show the Widget on both front-end and wp-admin pages of staging, so that admin-side problems are reportable too.
 31. As the developer, I want the WordPress embed gated on hostname, so that it works even though staging's wp-config is outside the repo.
@@ -63,7 +63,7 @@ One public repository, `anovoselnik/t3-feedback`, holding the Widget, the Receiv
 
 ### Widget
 
-- One vanilla JavaScript file, classic script, no build step, no dependencies. Served from jsDelivr at a major-version range (`@0`), so each new release tag reaches every embed without edits. Only the developer can push tags, so a merged change reaches staging sites only when it is tagged.
+- One vanilla JavaScript file, classic script, no build step, no dependencies. Served from jsDelivr at `@latest`, so each new release tag reaches every embed without edits. Only the developer can push tags, so a merged change reaches staging sites only when it is tagged.
 - Configured through data attributes on its script tag: the Project slug (`owner/name`) and a JSON map of Machine label to Receiver base URL. Optional attribute for the Receiver path.
 - Mounts into a Shadow DOM host with `all: initial` isolation. The host element is marked permanent for Turbo Drive.
 - On load, probes every Machine's health endpoint with a short timeout. Renders the button only if at least one answers. Machines that do not answer are omitted from the chooser. The probe is what triggers the browser's one-time local-network permission prompt.
