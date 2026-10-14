@@ -27,6 +27,8 @@ export function createReceiver({ config, t3, git, readRemote }) {
       return {
         threadId: command.threadId,
         threadUrl: `${config.webUiBaseUrl.replace(/\/+$/, "")}/${environmentId}/${command.threadId}`,
+        // Opens the Thread in the T3 Code desktop app, which handles these links from v0.0.46.
+        appUrl: `t3code://threads/${encodeURIComponent(environmentId)}/${encodeURIComponent(command.threadId)}`,
       };
     },
   };

@@ -72,6 +72,7 @@ One public repository, `anovoselnik/t3-feedback`, holding the Widget, the Receiv
 - Images that are not PNG or JPEG, or exceed about 1.5 MB, are downscaled to a maximum of 1920 px and re-encoded as JPEG through a canvas.
 - Sends `multipart/form-data` with: project, machine, message, pageUrl, viewport, userAgent, and the optional image file. Multipart with no custom headers avoids a CORS preflight.
 - Send button disabled while in flight. Success shows "Sent" with an "Open thread" link built from the Receiver's response. Failure shows the error and a hint to check Tailscale.
+- An "Open threads in the T3 Code app" checkbox, remembered per site in localStorage, points "Open thread" at the Receiver's `t3code://threads/<environment>/<thread>` link instead of the web UI. The T3 Code desktop app opens these links from v0.0.46, and it has to be connected to the Machine's environment.
 - Keyboard: Ctrl/Cmd+Enter sends, Escape closes.
 
 ### Receiver

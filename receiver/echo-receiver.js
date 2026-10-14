@@ -17,7 +17,12 @@ export function createEchoReceiver({ machine, threadBaseUrl }) {
         image: image && { mimeType: image.mimeType, sizeBytes: image.bytes.length, ...imageSize(image) },
       };
       received.set(threadId, echoed);
-      return { threadId, threadUrl: `${threadBaseUrl.replace(/\/+$/, "")}/${threadId}`, echo: echoed };
+      return {
+        threadId,
+        threadUrl: `${threadBaseUrl.replace(/\/+$/, "")}/${threadId}`,
+        appUrl: `t3code://threads/echo/${threadId}`,
+        echo: echoed,
+      };
     },
 
     received(threadId) {

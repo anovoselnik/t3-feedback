@@ -41,7 +41,7 @@ test("echoes a Feedback and links to a page that shows it", async () => {
   const response = await fetch(`${base}/feedback`, { method: "POST", headers: { origin: pageOrigin }, body: form() });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), pageOrigin);
-  const { threadId, threadUrl, echo } = await response.json();
+  const { threadId, threadUrl, appUrl, echo } = await response.json();
   const expected = {
     project: "acme/site",
     machine: "echo",
@@ -52,6 +52,7 @@ test("echoes a Feedback and links to a page that shows it", async () => {
     image: null,
   };
   assert.equal(threadUrl, `${pageOrigin}/thread/${threadId}`);
+  assert.equal(appUrl, `t3code://threads/echo/${threadId}`);
   assert.deepEqual(echo, expected);
   assert.deepEqual(receiver.received(threadId), expected);
 });
