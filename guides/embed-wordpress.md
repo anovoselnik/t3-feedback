@@ -7,7 +7,7 @@ function t3_feedback_widget() {
     $host = (string) wp_parse_url( home_url(), PHP_URL_HOST );
     if ( 'staging.example.com' !== $host && ! str_ends_with( $host, '.local' ) ) return;
     wp_print_script_tag( array(
-        'src'           => 'https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@v0.2.0/widget/t3-feedback.js',
+        'src'           => 'https://cdn.jsdelivr.net/gh/anovoselnik/t3-feedback@latest/widget/t3-feedback.js',
         'data-project'  => 'your-github-user/your-theme',
         'data-machines' => wp_json_encode( array(
             'desktop' => 'https://desktop.tail1234.ts.net:7777',
