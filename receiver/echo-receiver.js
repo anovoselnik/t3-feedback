@@ -20,7 +20,7 @@ export function createEchoReceiver({ machine, threadBaseUrl }) {
       return {
         threadId,
         threadUrl: `${threadBaseUrl.replace(/\/+$/, "")}/${threadId}`,
-        appUrl: `t3code://threads/echo/${threadId}`,
+        appUrl: `t3code://threads/${machine}/${threadId}`,
         echo: echoed,
       };
     },
