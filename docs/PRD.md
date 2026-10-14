@@ -1,6 +1,6 @@
 # PRD: t3-feedback
 
-Status: needs-triage. Written 2026-10-12 from the design session that produced [CONTEXT.md](../CONTEXT.md), [ADR-0001](adr/0001-project-identity-by-github-slug.md), and [ADR-0002](adr/0002-receiver-per-machine.md). Vocabulary follows the glossary: Widget, Receiver, Machine, Feedback, Project, Thread, Staging page.
+Status: v1 shipped 2026-10-14 as widget release v0.2.0, accepted on both Machines and a phone. Written 2026-10-12 from the design session that produced [CONTEXT.md](../CONTEXT.md), [ADR-0001](adr/0001-project-identity-by-github-slug.md), and [ADR-0002](adr/0002-receiver-per-machine.md). Vocabulary follows the glossary: Widget, Receiver, Machine, Feedback, Project, Thread, Staging page.
 
 ## Problem Statement
 
