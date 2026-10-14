@@ -16,7 +16,7 @@ const MACHINES = [
 ];
 const PAGE_PORT = 7779;
 // The release that Staging pages embed. Bump it with the embed URLs in the README.
-const WIDGET_RELEASE = "v0.1.0";
+const WIDGET_RELEASE = "v0.2.0";
 const LOCAL_WIDGET = "/t3-feedback.js";
 const pageOrigins = [`http://localhost:${PAGE_PORT}`, `http://127.0.0.1:${PAGE_PORT}`];
 
