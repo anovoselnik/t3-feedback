@@ -1,11 +1,11 @@
 const DISPATCH_TIMEOUT_MS = 120_000;
 const PROBE_TIMEOUT_MS = 2_000;
-// T3 Code refuses orchestration requests that don't name the protocol they speak.
-const ORCHESTRATION_PROTOCOL = "2";
+// The orchestration protocol this client speaks. T3 Code refuses orchestration
+// requests that don't name it, and reports its own in the environment descriptor.
+export const ORCHESTRATION_PROTOCOL = 2;
 
 export function createT3Client({ baseUrl, token, fetch = globalThis.fetch, WebSocket = globalThis.WebSocket }) {
   const base = baseUrl.replace(/\/+$/, "");
-  let environmentId;
 
   async function getJson(path, init = {}) {
     const response = await fetch(`${base}${path}`, init).catch(() => {
@@ -18,23 +18,14 @@ export function createT3Client({ baseUrl, token, fetch = globalThis.fetch, WebSo
   const auth = () => ({ authorization: `Bearer ${token}` });
 
   return {
-    async environmentId() {
-      environmentId ??= (await getJson("/.well-known/t3/environment")).environmentId;
-      return environmentId;
-    },
-
-    async reachable() {
-      try {
-        await getJson("/.well-known/t3/environment", { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-        return true;
-      } catch {
-        return false;
-      }
+    // Not cached: T3 Code can be updated, and change protocol, while the Receiver runs.
+    async environment() {
+      return getJson("/.well-known/t3/environment", { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
     },
 
     // The shell snapshot lists only active projects and leaves out thread messages.
     async listProjects() {
-      const headers = { ...auth(), "x-t3-orchestration-protocol": ORCHESTRATION_PROTOCOL };
+      const headers = { ...auth(), "x-t3-orchestration-protocol": String(ORCHESTRATION_PROTOCOL) };
       return (await getJson("/api/orchestration/shell", { headers })).projects;
     },
 

@@ -20,12 +20,11 @@ const remotes = { "/work/site": "git@github.com:acme/site.git", "/work/other": "
 
 let dispatched;
 let t3Up;
+let t3Protocol;
 const t3 = {
-  async reachable() {
-    return t3Up;
-  },
-  async environmentId() {
-    return "env-1";
+  async environment() {
+    if (!t3Up) throw new Error("T3 Code at http://127.0.0.1:3773 is unreachable");
+    return { environmentId: "env-1", orchestrationProtocolVersion: t3Protocol };
   },
   async listProjects() {
     return projects;
@@ -52,6 +51,7 @@ after(() => server.close());
 beforeEach(() => {
   dispatched = [];
   t3Up = true;
+  t3Protocol = 2;
 });
 
 const identity = { "tailscale-user-login": "dev@github" };
@@ -147,15 +147,38 @@ test("rejects a Feedback without a message or a valid slug", async () => {
   assert.equal((await post(form({ project: "not a slug" }))).status, 400);
 });
 
-test("reports the Machine label and T3 Code reachability", async () => {
+test("reports the Machine label, T3 Code reachability, and its orchestration protocol", async () => {
   let response = await fetch(`${base}/health`, { headers: { ...identity, origin: "https://staging.example.com" } });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "https://staging.example.com");
-  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: true });
+  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: true, t3Protocol: 2, t3Compatible: true });
+
+  t3Protocol = 1;
+  response = await fetch(`${base}/health`, { headers: identity });
+  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: true, t3Protocol: 1, t3Compatible: false });
 
   t3Up = false;
   response = await fetch(`${base}/health`, { headers: identity });
-  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: false });
+  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: false, t3Protocol: null, t3Compatible: false });
+});
+
+test("refuses a Feedback when T3 Code speaks another orchestration protocol", async () => {
+  t3Protocol = 1;
+  let response = await post(form());
+  assert.equal(response.status, 502);
+  assert.equal(
+    (await response.json()).error,
+    "T3 Code on omarchy speaks orchestration protocol 1, but this Receiver speaks 2. Update T3 Code on omarchy.",
+  );
+
+  t3Protocol = 3;
+  response = await post(form());
+  assert.match((await response.json()).error, /protocol 3, .* Update the Receiver on omarchy\.$/);
+
+  t3Protocol = undefined;
+  response = await post(form());
+  assert.match((await response.json()).error, /protocol unknown, .* Update T3 Code on omarchy\.$/);
+  assert.equal(dispatched.length, 0);
 });
 
 test("opens a Thread for a text-only Feedback and returns its URL", async () => {

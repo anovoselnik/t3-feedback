@@ -46,7 +46,7 @@ function fakeWebSocket(reply) {
 const routes = {
   "POST /api/auth/websocket-ticket": { ticket: "tick et", expiresAt: "2026-10-12T10:00:00Z" },
   "GET /api/orchestration/shell": { projects: [{ id: "p1", workspaceRoot: "/work/site" }], threads: [] },
-  "GET /.well-known/t3/environment": { environmentId: "env-1" },
+  "GET /.well-known/t3/environment": { environmentId: "env-1", orchestrationProtocolVersion: 2 },
 };
 
 const launch = { threadId: "t1", projectId: "p1", initialMessage: { messageId: "m1", text: "hi", attachments: [] } };
@@ -119,16 +119,15 @@ test("lists projects from the shell snapshot with the token", async () => {
   assert.equal(requests[0].protocol, "2");
 });
 
-test("reads and caches the environment id", async () => {
+test("reads the environment descriptor on every call", async () => {
   const { fetch, requests } = fakeFetch(routes);
   const client = createT3Client({ baseUrl: "http://127.0.0.1:3773", token: "secret", fetch });
-  assert.equal(await client.environmentId(), "env-1");
-  assert.equal(await client.environmentId(), "env-1");
-  assert.equal(requests.length, 1);
+  assert.deepEqual(await client.environment(), { environmentId: "env-1", orchestrationProtocolVersion: 2 });
+  await client.environment();
+  assert.equal(requests.length, 2);
 });
 
-test("reports reachability", async () => {
-  const up = createT3Client({ baseUrl: "http://t3", token: "t", fetch: fakeFetch(routes).fetch });
+test("reports an unreachable T3 Code", async () => {
   const down = createT3Client({
     baseUrl: "http://t3",
     token: "t",
@@ -136,7 +135,6 @@ test("reports reachability", async () => {
       throw new TypeError("fetch failed");
     },
   });
-  assert.equal(await up.reachable(), true);
-  assert.equal(await down.reachable(), false);
+  await assert.rejects(down.environment(), /T3 Code at http:\/\/t3 is unreachable/);
   await assert.rejects(down.listProjects(), /T3 Code at http:\/\/t3 is unreachable/);
 });

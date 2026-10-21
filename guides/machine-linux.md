@@ -94,10 +94,10 @@ From this machine or any other device on your tailnet:
 
 ```sh
 curl https://desktop.tail1234.ts.net:7777/health
-# {"machine":"desktop","t3Reachable":true}
+# {"machine":"desktop","t3Reachable":true,"t3Protocol":2,"t3Compatible":true}
 ```
 
-If `t3Reachable` is false, T3 Code isn't running or `t3BaseUrl` is wrong.
+If `t3Reachable` is false, T3 Code isn't running or `t3BaseUrl` is wrong. If `t3Compatible` is false, T3 Code and the receiver speak different orchestration protocols: this receiver needs protocol 2 (T3 Code 0.1 or newer). Update whichever side is older.
 
 To send a test feedback without a staging site, use the slug of a project that T3 Code has on this machine:
 

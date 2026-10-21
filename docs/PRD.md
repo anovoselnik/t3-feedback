@@ -129,8 +129,9 @@ One public repository, `anovoselnik/t3-feedback`, holding the Widget, the Receiv
   > UI feedback from staging page `<URL>` (viewport `<w>x<h>`), screenshot attached. The symptom is visual, but the cause may be anywhere: trace from the rendered page back through templates, components, and backend code that produce it. Make the change the message asks for and verify it on a local preview before finishing.
 
   The staleness note is appended when the fetch failed. "screenshot attached" is omitted when there is no image.
-- Response: JSON with thread id and a URL of the form `<web UI base>/<environmentId>/<threadId>`. The thread id is the one the Receiver generated for the launch. The environment id is read at startup from `GET /.well-known/t3/environment` (no auth; field `environmentId`). On omarchy the web UI base is `https://omarchy.tail8fd60a.ts.net`, where Tailscale Serve on 443 proxies T3 Code on 3773. The link opens the Thread on any browser already paired with that environment; an unpaired browser is sent to `/pair` first.
-- Health endpoint returns the Machine label and whether T3 Code is reachable.
+- Response: JSON with thread id and a URL of the form `<web UI base>/<environmentId>/<threadId>`. The thread id is the one the Receiver generated for the launch. The environment id is read for each Feedback from `GET /.well-known/t3/environment` (no auth; fields `environmentId` and `orchestrationProtocolVersion`). On omarchy the web UI base is `https://omarchy.tail8fd60a.ts.net`, where Tailscale Serve on 443 proxies T3 Code on 3773. The link opens the Thread on any browser already paired with that environment; an unpaired browser is sent to `/pair` first.
+- Protocol check: before anything else, a Feedback is refused with 502 unless the environment descriptor's `orchestrationProtocolVersion` is 2, the protocol the Receiver speaks (0.0.x reports 1). The message names the protocol and which side to update, instead of the bare 400 or 426 T3 Code would return. The descriptor is not cached, so a T3 Code update while the Receiver runs is noticed.
+- Health endpoint returns the Machine label, whether T3 Code is reachable, its orchestration protocol (`t3Protocol`), and whether the Receiver speaks it (`t3Compatible`). The Widget only needs the 200.
 
 ### Modules (deep modules, testable in isolation)
 

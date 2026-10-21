@@ -26,15 +26,16 @@ Check whether the receiver already answers:
 curl -s https://<this-machine>.<tailnet>.ts.net:7777/health
 ```
 
-- It returns `{"machine":"...","t3Reachable":true}`: the receiver is ready. Note its `machine` name and go to step 3.
+- It returns `{"machine":"...","t3Reachable":true,...,"t3Compatible":true}`: the receiver is ready. Note its `machine` name and go to step 3.
 - It fails or returns nothing: set it up by following [machine-linux.md](machine-linux.md) on Linux or [machine-macos.md](machine-macos.md) on macOS. Put the staging origins from step 1 in `allowedOrigins`.
 - It returns `t3Reachable: false`: T3 Code isn't running. Ask the user to start it.
+- It returns `t3Compatible: false`: T3 Code and the receiver speak different orchestration protocols (`t3Protocol` is T3 Code's; the receiver needs 2). Ask the user to update whichever side is older.
 
 Ask the user before you create a T3 Code token or change Tailscale Serve settings. Both act outside this repository. Keep the token in `~/.config/t3-feedback/token` with mode 600. It has full access to T3 Code, so it never goes into the repository or the page.
 
 Expose the receiver with `tailscale serve` only. Funnel would put it on the public internet.
 
-Done when the health check returns `t3Reachable: true` and `~/.config/t3-feedback/config.json` lists every staging origin from step 1.
+Done when the health check returns `t3Reachable: true` and `t3Compatible: true` and `~/.config/t3-feedback/config.json` lists every staging origin from step 1.
 
 ## 3. Check that T3 Code has this project
 
