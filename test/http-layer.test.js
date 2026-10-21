@@ -30,9 +30,9 @@ const t3 = {
   async listProjects() {
     return projects;
   },
-  async dispatch(command) {
-    dispatched.push(command);
-    return { sequence: 1 };
+  async launchThread(launch, uploads) {
+    dispatched.push({ launch, uploads });
+    return { threadId: launch.threadId };
   },
 };
 const git = async (args) => (args[0] === "symbolic-ref" ? "origin/main\n" : "");
@@ -161,25 +161,25 @@ test("reports the Machine label and T3 Code reachability", async () => {
 test("opens a Thread for a text-only Feedback and returns its URL", async () => {
   const response = await post(form(), { ...identity, origin: "https://staging.example.com" });
   assert.equal(response.status, 200);
-  const [command] = dispatched;
+  const [{ launch, uploads }] = dispatched;
   assert.deepEqual(await response.json(), {
-    threadId: command.threadId,
-    threadUrl: `https://omarchy.example.ts.net/env-1/${command.threadId}`,
-    appUrl: `t3code://threads/env-1/${command.threadId}`,
+    threadId: launch.threadId,
+    threadUrl: `https://omarchy.example.ts.net/env-1/${launch.threadId}`,
+    appUrl: `t3code://threads/env-1/${launch.threadId}`,
   });
-  assert.equal(command.bootstrap.createThread.projectId, "p-site");
-  assert.equal(command.bootstrap.createThread.title, "Feedback: Button is misaligned");
-  assert.equal(command.runtimeMode, "full-access");
-  assert.match(command.bootstrap.prepareWorktree.branch, /^feedback\/button-is-misaligned-[0-9a-f]{4}$/);
-  assert.deepEqual(command.message.attachments, []);
-  assert.match(command.message.text, /^UI feedback from staging page `https:\/\/staging.example.com\/cart` \(viewport `1280x800`\)\. /);
+  assert.equal(launch.projectId, "p-site");
+  assert.equal(launch.title, "Feedback: Button is misaligned");
+  assert.equal(launch.runtimeMode, "full-access");
+  assert.match(launch.workspaceStrategy.branch, /^feedback\/button-is-misaligned-[0-9a-f]{4}$/);
+  assert.deepEqual(uploads, []);
+  assert.match(launch.initialMessage.text, /^UI feedback from staging page `https:\/\/staging.example.com\/cart` \(viewport `1280x800`\)\. /);
 });
 
 test("attaches the uploaded image to the first message", async () => {
   const bytes = new Uint8Array([137, 80, 78, 71]);
   const response = await post(form({}, new Blob([bytes], { type: "image/png" })));
   assert.equal(response.status, 200);
-  const [attachment] = dispatched[0].message.attachments;
+  const [attachment] = dispatched[0].uploads;
   assert.deepEqual(attachment, {
     type: "image",
     name: "screenshot.png",
@@ -187,7 +187,7 @@ test("attaches the uploaded image to the first message", async () => {
     sizeBytes: 4,
     dataUrl: `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`,
   });
-  assert.match(dispatched[0].message.text, /, screenshot attached\./);
+  assert.match(dispatched[0].launch.initialMessage.text, /, screenshot attached\./);
 });
 
 test("returns 404 naming the slug and the Machine when no Project matches", async () => {

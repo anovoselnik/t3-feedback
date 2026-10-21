@@ -1,6 +1,6 @@
 # Set up a machine on Linux
 
-This guide installs the receiver as a systemd user service and exposes it on your tailnet with Tailscale Serve. Repeat it on every Linux machine that should take feedback. Tested on Arch Linux with t3 v0.0.45.
+This guide installs the receiver as a systemd user service and exposes it on your tailnet with Tailscale Serve. Repeat it on every Linux machine that should take feedback. Needs T3 Code 0.1.0 or newer. Tested on Arch Linux with t3 v0.1.0.
 
 ## Before you start
 

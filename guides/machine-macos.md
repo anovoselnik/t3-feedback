@@ -1,6 +1,6 @@
 # Set up a machine on macOS
 
-This guide installs the receiver as a launchd agent and exposes it on your tailnet with Tailscale Serve. Repeat it on every Mac that should take feedback. Tested on macOS 26.7 with the T3 Code desktop app (t3 v0.0.45) and the Tailscale app 1.104.1.
+This guide installs the receiver as a launchd agent and exposes it on your tailnet with Tailscale Serve. Repeat it on every Mac that should take feedback. Needs T3 Code 0.1.0 or newer. Tested on macOS 26.7 with the Tailscale app 1.104.1.
 
 ## Before you start
 
