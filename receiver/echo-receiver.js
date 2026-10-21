@@ -7,7 +7,7 @@ export function createEchoReceiver({ machine, threadBaseUrl }) {
 
   return {
     async health() {
-      return { machine, t3Reachable: false };
+      return { machine, t3Reachable: false, t3Protocol: null, t3Compatible: false };
     },
 
     async submit({ image, ...feedback }) {

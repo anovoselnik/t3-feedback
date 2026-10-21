@@ -10,6 +10,10 @@ The button appears only after one of your machines answers within 4 seconds. Che
 4. The browser hasn't blocked local network access for the site. See the next section.
 5. The script tag has no `type="module"`.
 
+## Sending fails with "speaks orchestration protocol"
+
+T3 Code and the receiver on that machine disagree about T3 Code's API. The message names the side to update: T3 Code itself, or the receiver (pull this repository on the machine and restart the service). `/health` shows the same thing as `t3Protocol` and `t3Compatible`.
+
 ## The browser asks about local network access
 
 Chrome 142+ and Firefox 151+ treat Tailscale addresses as local. The first time a staging site loads the button, the browser asks whether the site may reach devices on your local network. Allow it. Safari doesn't ask.

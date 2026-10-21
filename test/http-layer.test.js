@@ -20,19 +20,18 @@ const remotes = { "/work/site": "git@github.com:acme/site.git", "/work/other": "
 
 let dispatched;
 let t3Up;
+let t3Protocol;
 const t3 = {
-  async reachable() {
-    return t3Up;
-  },
-  async environmentId() {
-    return "env-1";
+  async environment() {
+    if (!t3Up) throw new Error("T3 Code at http://127.0.0.1:3773 is unreachable");
+    return { environmentId: "env-1", orchestrationProtocolVersion: t3Protocol };
   },
   async listProjects() {
     return projects;
   },
-  async dispatch(command) {
-    dispatched.push(command);
-    return { sequence: 1 };
+  async launchThread(launch, uploads) {
+    dispatched.push({ launch, uploads });
+    return { threadId: launch.threadId };
   },
 };
 const git = async (args) => (args[0] === "symbolic-ref" ? "origin/main\n" : "");
@@ -52,6 +51,7 @@ after(() => server.close());
 beforeEach(() => {
   dispatched = [];
   t3Up = true;
+  t3Protocol = 2;
 });
 
 const identity = { "tailscale-user-login": "dev@github" };
@@ -147,39 +147,62 @@ test("rejects a Feedback without a message or a valid slug", async () => {
   assert.equal((await post(form({ project: "not a slug" }))).status, 400);
 });
 
-test("reports the Machine label and T3 Code reachability", async () => {
+test("reports the Machine label, T3 Code reachability, and its orchestration protocol", async () => {
   let response = await fetch(`${base}/health`, { headers: { ...identity, origin: "https://staging.example.com" } });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "https://staging.example.com");
-  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: true });
+  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: true, t3Protocol: 2, t3Compatible: true });
+
+  t3Protocol = 1;
+  response = await fetch(`${base}/health`, { headers: identity });
+  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: true, t3Protocol: 1, t3Compatible: false });
 
   t3Up = false;
   response = await fetch(`${base}/health`, { headers: identity });
-  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: false });
+  assert.deepEqual(await response.json(), { machine: "omarchy", t3Reachable: false, t3Protocol: null, t3Compatible: false });
+});
+
+test("refuses a Feedback when T3 Code speaks another orchestration protocol", async () => {
+  t3Protocol = 1;
+  let response = await post(form());
+  assert.equal(response.status, 502);
+  assert.equal(
+    (await response.json()).error,
+    "T3 Code on omarchy speaks orchestration protocol 1, but this Receiver speaks 2. Update T3 Code on omarchy.",
+  );
+
+  t3Protocol = 3;
+  response = await post(form());
+  assert.match((await response.json()).error, /protocol 3, .* Update the Receiver on omarchy\.$/);
+
+  t3Protocol = undefined;
+  response = await post(form());
+  assert.match((await response.json()).error, /protocol unknown, .* Update T3 Code on omarchy\.$/);
+  assert.equal(dispatched.length, 0);
 });
 
 test("opens a Thread for a text-only Feedback and returns its URL", async () => {
   const response = await post(form(), { ...identity, origin: "https://staging.example.com" });
   assert.equal(response.status, 200);
-  const [command] = dispatched;
+  const [{ launch, uploads }] = dispatched;
   assert.deepEqual(await response.json(), {
-    threadId: command.threadId,
-    threadUrl: `https://omarchy.example.ts.net/env-1/${command.threadId}`,
-    appUrl: `t3code://threads/env-1/${command.threadId}`,
+    threadId: launch.threadId,
+    threadUrl: `https://omarchy.example.ts.net/env-1/${launch.threadId}`,
+    appUrl: `t3code://threads/env-1/${launch.threadId}`,
   });
-  assert.equal(command.bootstrap.createThread.projectId, "p-site");
-  assert.equal(command.bootstrap.createThread.title, "Feedback: Button is misaligned");
-  assert.equal(command.runtimeMode, "full-access");
-  assert.match(command.bootstrap.prepareWorktree.branch, /^feedback\/button-is-misaligned-[0-9a-f]{4}$/);
-  assert.deepEqual(command.message.attachments, []);
-  assert.match(command.message.text, /^UI feedback from staging page `https:\/\/staging.example.com\/cart` \(viewport `1280x800`\)\. /);
+  assert.equal(launch.projectId, "p-site");
+  assert.equal(launch.title, "Feedback: Button is misaligned");
+  assert.equal(launch.runtimeMode, "full-access");
+  assert.match(launch.workspaceStrategy.branch, /^feedback\/button-is-misaligned-[0-9a-f]{4}$/);
+  assert.deepEqual(uploads, []);
+  assert.match(launch.initialMessage.text, /^UI feedback from staging page `https:\/\/staging.example.com\/cart` \(viewport `1280x800`\)\. /);
 });
 
 test("attaches the uploaded image to the first message", async () => {
   const bytes = new Uint8Array([137, 80, 78, 71]);
   const response = await post(form({}, new Blob([bytes], { type: "image/png" })));
   assert.equal(response.status, 200);
-  const [attachment] = dispatched[0].message.attachments;
+  const [attachment] = dispatched[0].uploads;
   assert.deepEqual(attachment, {
     type: "image",
     name: "screenshot.png",
@@ -187,7 +210,7 @@ test("attaches the uploaded image to the first message", async () => {
     sizeBytes: 4,
     dataUrl: `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`,
   });
-  assert.match(dispatched[0].message.text, /, screenshot attached\./);
+  assert.match(dispatched[0].launch.initialMessage.text, /, screenshot attached\./);
 });
 
 test("returns 404 naming the slug and the Machine when no Project matches", async () => {

@@ -38,61 +38,47 @@ export function messageText(feedback, stalenessNote) {
   return [preamble, feedback.message.trim(), stalenessNote].filter(Boolean).join("\n\n");
 }
 
-function imageAttachment(image) {
-  const base64 = image.bytes.toString("base64");
+function imageUpload(image) {
   return {
     type: "image",
     name: `screenshot.${IMAGE_EXTENSIONS[image.mimeType]}`,
     mimeType: image.mimeType,
     sizeBytes: image.bytes.length,
-    dataUrl: `data:${image.mimeType};base64,${base64}`,
+    dataUrl: `data:${image.mimeType};base64,${image.bytes.toString("base64")}`,
   };
 }
 
-export function buildDispatch({
+// Returns the orchestration.launchThread input and the images to store before it.
+// The launch's attachments are filled in from the stored images' ids.
+export function buildLaunch({
   feedback,
   project,
   branch,
   fallbackModelSelection,
   uuid = randomUUID,
   branchSuffix = () => randomBytes(2).toString("hex"),
-  now = new Date(),
 }) {
-  const createdAt = now.toISOString();
-  const modelSelection = project.defaultModelSelection ?? fallbackModelSelection;
   return {
-    type: "thread.turn.start",
-    commandId: uuid(),
-    threadId: uuid(),
-    message: {
-      messageId: uuid(),
-      role: "user",
-      text: messageText(feedback, branch.stalenessNote),
-      attachments: feedback.image ? [imageAttachment(feedback.image)] : [],
-    },
-    modelSelection,
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    bootstrap: {
-      createThread: {
-        projectId: project.id,
-        title: threadTitle(feedback.message),
-        modelSelection,
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: branch.baseBranch,
-        worktreePath: null,
-        createdAt,
-      },
-      prepareWorktree: {
-        projectCwd: project.workspaceRoot,
-        baseBranch: branch.baseBranch,
+    launch: {
+      commandId: uuid(),
+      threadId: uuid(),
+      projectId: project.id,
+      title: threadTitle(feedback.message),
+      modelSelection: project.defaultModelSelection ?? fallbackModelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      workspaceStrategy: {
+        type: "worktree",
+        baseRef: branch.baseBranch,
         branch: branchName(feedback.message, branchSuffix()),
         startFromOrigin: branch.startFromOrigin,
-        requireWorktree: true,
       },
-      runSetupScript: true,
+      initialMessage: {
+        messageId: uuid(),
+        text: messageText(feedback, branch.stalenessNote),
+        attachments: [],
+      },
     },
-    createdAt,
+    uploads: feedback.image ? [imageUpload(feedback.image)] : [],
   };
 }

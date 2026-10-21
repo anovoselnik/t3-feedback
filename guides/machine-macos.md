@@ -1,6 +1,6 @@
 # Set up a machine on macOS
 
-This guide installs the receiver as a launchd agent and exposes it on your tailnet with Tailscale Serve. Repeat it on every Mac that should take feedback. Tested on macOS 26.7 with the T3 Code desktop app (t3 v0.0.45) and the Tailscale app 1.104.1.
+This guide installs the receiver as a launchd agent and exposes it on your tailnet with Tailscale Serve. Repeat it on every Mac that should take feedback. Needs T3 Code 0.1.0 or newer. Tested on macOS 26.7 with the Tailscale app 1.104.1.
 
 ## Before you start
 
@@ -100,10 +100,10 @@ From this machine or any other device on your tailnet:
 
 ```sh
 curl https://laptop.tail1234.ts.net:7777/health
-# {"machine":"laptop","t3Reachable":true}
+# {"machine":"laptop","t3Reachable":true,"t3Protocol":2,"t3Compatible":true}
 ```
 
-If `t3Reachable` is false, the T3 Code app isn't running or `t3BaseUrl` is wrong.
+If `t3Reachable` is false, the T3 Code app isn't running or `t3BaseUrl` is wrong. If `t3Compatible` is false, T3 Code and the receiver speak different orchestration protocols: this receiver needs protocol 2 (T3 Code 0.1 or newer). Update whichever side is older.
 
 To send a test feedback without a staging site, use the slug of a project that T3 Code has on this machine:
 
